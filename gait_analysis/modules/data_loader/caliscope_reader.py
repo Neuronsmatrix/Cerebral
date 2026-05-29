@@ -50,6 +50,11 @@ def load_caliscope_session(session_dir: str, model: str = "SIMPLE_HOLISTIC") -> 
 
     merged = labelled.merge(times, on="sync_index", how="left")
     merged = merged.sort_values("sync_index").reset_index(drop=True)
+    # Every labelled (triangulated) frame must have a capture-clock entry;
+    # a missing one means corrupt input, so fail loud rather than emit NaN time.
+    if merged["timestamp"].isna().any():
+        bad = merged.loc[merged["timestamp"].isna(), "sync_index"].tolist()
+        raise ValueError(f"No frame_time entry for sync_index values: {bad}")
     # Zero-base relative to the frames actually present in this session.
     merged["timestamp"] = merged["timestamp"] - merged["timestamp"].min()
 

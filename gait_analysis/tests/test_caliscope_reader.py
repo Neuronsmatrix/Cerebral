@@ -53,8 +53,8 @@ def test_load_session_timestamps_zero_based_and_monotonic(tmp_path):
     df = load_caliscope_session(str(sess), model="SIMPLE_HOLISTIC")
     assert df["timestamp"].iloc[0] == pytest.approx(0.0, abs=1e-6)
     assert df["timestamp"].is_monotonic_increasing
-    # mean of the three ports at sync 6 = ~0.0505 s after the sync-5 base
-    assert df["timestamp"].iloc[1] == pytest.approx(0.0505, abs=1e-3)
+    # sync-6 port-mean (1000.0505) minus sync-5 port-mean (1000.0005) = 0.0500 s
+    assert df["timestamp"].iloc[1] == pytest.approx(0.0500, abs=1e-4)
 
 
 def test_load_session_sets_fps_and_model_attrs(tmp_path):
