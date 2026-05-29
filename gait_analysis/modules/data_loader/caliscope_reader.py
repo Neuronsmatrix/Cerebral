@@ -25,11 +25,15 @@ def derive_fps(timestamps) -> float:
 
 
 def _frame_timestamps(frame_time_csv: Path) -> pd.DataFrame:
-    """Collapse per-port frame_time to one zero-based timestamp per sync_index."""
+    """Mean ``frame_time`` per ``sync_index`` (collapsing the per-port rows).
+
+    Not zero-based here: the file may contain sync indices that never made it
+    into the labelled 3D output, so zero-basing must happen after the join to
+    the labelled frames (in ``load_caliscope_session``).
+    """
     fth = pd.read_csv(frame_time_csv)
     per_sync = fth.groupby("sync_index", as_index=False)["frame_time"].mean()
-    per_sync["timestamp"] = per_sync["frame_time"] - per_sync["frame_time"].min()
-    return per_sync[["sync_index", "timestamp"]]
+    return per_sync.rename(columns={"frame_time": "timestamp"})
 
 
 def load_caliscope_session(session_dir: str, model: str = "SIMPLE_HOLISTIC") -> pd.DataFrame:
@@ -44,14 +48,16 @@ def load_caliscope_session(session_dir: str, model: str = "SIMPLE_HOLISTIC") -> 
     labelled = pd.read_csv(model_dir / f"xyz_{model}_labelled.csv")
     times = _frame_timestamps(model_dir / "frame_time_history.csv")
 
-    df = labelled.merge(times, on="sync_index", how="left")
-    df = df.sort_values("sync_index").reset_index(drop=True)
-    df.insert(0, "frame", range(len(df)))
+    merged = labelled.merge(times, on="sync_index", how="left")
+    merged = merged.sort_values("sync_index").reset_index(drop=True)
+    # Zero-base relative to the frames actually present in this session.
+    merged["timestamp"] = merged["timestamp"] - merged["timestamp"].min()
 
-    coord_cols = [c for c in df.columns
-                  if c.endswith(("_x", "_y", "_z")) and c not in ("frame",)]
-    df = df[["frame", "timestamp"] + coord_cols]
+    coord_cols = [c for c in merged.columns if c.endswith(("_x", "_y", "_z"))]
+    result = pd.DataFrame({"frame": range(len(merged)),
+                           "timestamp": merged["timestamp"].to_numpy()})
+    result = pd.concat([result, merged[coord_cols].reset_index(drop=True)], axis=1)
 
-    df.attrs["fps"] = derive_fps(df["timestamp"].to_numpy())
-    df.attrs["model"] = model
-    return df
+    result.attrs["fps"] = derive_fps(result["timestamp"].to_numpy())
+    result.attrs["model"] = model
+    return result
