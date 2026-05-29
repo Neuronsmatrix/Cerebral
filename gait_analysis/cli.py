@@ -82,6 +82,7 @@ def analyze(session_dir: str, model: str, out_path: str) -> dict:
         "processed_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "gait_events": {k: list(map(int, v)) for k, v in events.items()},
         "spatiotemporal": {k: (None if v is None or (isinstance(v, float) and np.isnan(v))
+                               else v if isinstance(v, int)
                                else round(float(v), 3))
                            for k, v in spatiotemporal.items()},
         "joint_angles_mean": angles_mean,

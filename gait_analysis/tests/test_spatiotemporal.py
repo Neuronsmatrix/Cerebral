@@ -69,3 +69,27 @@ def test_stride_rejection_keeps_all_when_plausible():
               "right_HS": [25, 75, 125], "right_TO": [55, 105, 155]}
     out = calc_spatiotemporal(df, events, fps=fps, max_stride_m=1.5, max_step_m=1.0)
     assert out["n_strides_used"] == out["n_strides_total"] == 3
+
+
+def test_step_rejection_drops_length_and_width_together():
+    # Travel axis is +x (left heel ramps forward). Two right-HS steps:
+    # frame 25 = normal (0.4 m ahead, 0.1 m lateral); frame 75 = artifact
+    # (3 m ahead -> length > max_step_m). The artifact step must drop BOTH
+    # its length and its width, leaving only the normal step's values.
+    fps = 50.0
+    t = np.arange(0, 3.0, 1 / fps)
+    zeros = np.zeros_like(t)
+    df = pd.DataFrame({
+        "frame": range(len(t)), "timestamp": t,
+        "left_heel_x": 1.0 * t, "left_heel_y": zeros.copy(), "left_heel_z": zeros.copy(),
+        "right_heel_x": 1.0 * t, "right_heel_y": zeros.copy(), "right_heel_z": zeros.copy(),
+    })
+    df.loc[25, "right_heel_x"] = df.loc[25, "left_heel_x"] + 0.4
+    df.loc[25, "right_heel_y"] = 0.1
+    df.loc[75, "right_heel_x"] = df.loc[75, "left_heel_x"] + 3.0
+    df.loc[75, "right_heel_y"] = 5.0
+    events = {"left_HS": [0, 50, 100], "left_TO": [30, 80],
+              "right_HS": [25, 75], "right_TO": [55, 105]}
+    out = calc_spatiotemporal(df, events, fps=fps, max_stride_m=1.5, max_step_m=1.0)
+    assert out["step_length_m"] == pytest.approx(0.4, abs=0.1)
+    assert out["step_width_m"] == pytest.approx(0.1, abs=0.1)
