@@ -10,7 +10,7 @@ processing:
   filter_cutoff_hz: 6.0
   filter_order: 4
   max_gap_frames: 10
-  min_stride_duration_sec: 0.3
+  min_stride_duration_sec: 0.8       # full same-foot stride interval (HS->HS), not a step
 
 gait_events:
   method: velocity                    # velocity | height | combined

@@ -48,15 +48,18 @@ def detect_gait_events(
     heel: str = "heel",
     toe: str = "foot_index",
     vertical: str = "z",
-    min_stride_sec: float = 0.3,
+    min_stride_sec: float = 0.8,
     cutoff_hz: float = 6.0,
 ) -> dict:
     """Return ``{<side>_HS, <side>_TO}`` frame-index lists.
 
     ``velocity``/``height`` both reduce to vertical-trajectory extrema for the
     Phase-1 lower-body landmarks; ``method`` is accepted for forward
-    compatibility. Events closer than ``min_stride_sec`` are suppressed via the
-    ``distance`` constraint in ``find_peaks``.
+    compatibility. Same-event detections closer than ``min_stride_sec`` are
+    suppressed via the ``distance`` constraint in ``find_peaks``. NOTE:
+    ``min_stride_sec`` is a full same-foot stride interval (HS->HS), typically
+    ~0.8-1.2 s for normal walking -- NOT a step interval. Too small a value
+    (e.g. 0.3 s) lets ``find_peaks`` fire multiple spurious events per stride.
     """
     result: dict = {}
     for s in _sides(side):
