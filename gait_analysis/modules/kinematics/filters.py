@@ -1,0 +1,50 @@
+"""Signal conditioning: gap filling and zero-phase Butterworth filtering."""
+import numpy as np
+import pandas as pd
+from scipy.signal import butter, filtfilt
+
+_COORD_SUFFIXES = ("_x", "_y", "_z")
+
+
+def _is_coord_column(name: str) -> bool:
+    return name.endswith(_COORD_SUFFIXES)
+
+
+def _nan_run_bounds(isna: np.ndarray) -> list[tuple[int, int]]:
+    """Return (start, end_exclusive) index ranges of consecutive-NaN runs."""
+    runs = []
+    i, n = 0, len(isna)
+    while i < n:
+        if isna[i]:
+            j = i
+            while j < n and isna[j]:
+                j += 1
+            runs.append((i, j))
+            i = j
+        else:
+            i += 1
+    return runs
+
+
+def fill_gaps(df: pd.DataFrame, max_gap_frames: int = 10) -> pd.DataFrame:
+    """Cubic-interpolate interior NaN runs no longer than ``max_gap_frames``.
+
+    All-or-nothing per gap: a NaN run longer than ``max_gap_frames`` stays
+    fully NaN. Leading/trailing NaNs are left untouched. Only coordinate
+    columns (``*_x/_y/_z``) are processed. Call this BEFORE filtering.
+    """
+    out = df.copy()
+    for col in out.columns:
+        if not _is_coord_column(col):
+            continue
+        s = out[col]
+        isna = s.isna().to_numpy()
+        if s.notna().sum() < 4:  # cubic needs >=4 valid points
+            continue
+        # Fully interpolate interior gaps, then restore NaN over over-long runs.
+        filled = s.interpolate(method="cubic", limit_area="inside").to_numpy().copy()
+        for start, end in _nan_run_bounds(isna):
+            if (end - start) > max_gap_frames:
+                filled[start:end] = np.nan
+        out[col] = filled
+    return out
