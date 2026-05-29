@@ -5,12 +5,15 @@ import pandas as pd
 
 def calc_angle_3d(p1: np.ndarray, vertex: np.ndarray, p2: np.ndarray) -> float:
     """Included angle (degrees, 0-180) between vectors (vertex->p1) and (vertex->p2)."""
-    p1 = np.asarray(p1, float); vertex = np.asarray(vertex, float); p2 = np.asarray(p2, float)
+    p1 = np.asarray(p1, float)
+    vertex = np.asarray(vertex, float)
+    p2 = np.asarray(p2, float)
     if np.isnan(np.concatenate([p1, vertex, p2])).any():
         return float("nan")
     v1 = p1 - vertex
     v2 = p2 - vertex
-    n1 = np.linalg.norm(v1); n2 = np.linalg.norm(v2)
+    n1 = np.linalg.norm(v1)
+    n2 = np.linalg.norm(v2)
     if n1 == 0 or n2 == 0:
         return float("nan")
     cos = np.clip(np.dot(v1, v2) / (n1 * n2), -1.0, 1.0)
