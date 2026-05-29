@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from modules.data_loader.synchronizer import synchronize
 
@@ -30,3 +31,21 @@ def test_synchronize_clips_to_overlap():
     sa, sb = synchronize(a, b, target_fps=50.0)
     assert sa["timestamp"].iloc[0] >= 0.5 - 1e-9
     assert sa["timestamp"].iloc[-1] <= 2.0 + 1e-9
+
+
+def test_synchronize_short_streams_use_linear_without_error():
+    a = pd.DataFrame({"frame": range(3), "timestamp": [0.0, 0.1, 0.2],
+                      "left_hip_z": [0.0, 1.0, 2.0]})
+    b = pd.DataFrame({"frame": range(3), "timestamp": [0.0, 0.1, 0.2],
+                      "left_hip_z": [0.0, 2.0, 4.0]})
+    sa, sb = synchronize(a, b, target_fps=50.0)
+    assert len(sa) == len(sb) and len(sa) > 0
+    assert not sa["left_hip_z"].isna().all()
+
+
+def test_synchronize_raises_on_single_sample():
+    a = pd.DataFrame({"frame": [0], "timestamp": [0.0], "left_hip_z": [1.0]})
+    b = pd.DataFrame({"frame": range(5), "timestamp": np.arange(5) / 50.0,
+                      "left_hip_z": np.arange(5.0)})
+    with pytest.raises(ValueError):
+        synchronize(a, b, target_fps=50.0)
