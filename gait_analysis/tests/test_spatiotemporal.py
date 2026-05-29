@@ -36,3 +36,36 @@ def test_stance_swing_sum_to_about_100():
     }
     out = calc_spatiotemporal(df, events, fps=fps)
     assert out["stance_pct"] + out["swing_pct"] == pytest.approx(100.0, abs=1.0)
+
+
+def test_stride_rejection_drops_implausible_stride():
+    # 3 left HS -> 2 strides; second stride is a 5 m artifact and must be dropped.
+    t = np.arange(0, 4.0, 1 / 50.0)
+    zeros = np.zeros_like(t)
+    df = pd.DataFrame({
+        "frame": range(len(t)), "timestamp": t,
+        "left_heel_x": zeros.copy(), "left_heel_y": zeros.copy(), "left_heel_z": zeros.copy(),
+        "right_heel_x": zeros.copy(), "right_heel_y": zeros.copy(), "right_heel_z": zeros.copy(),
+    })
+    # place left heel x: HS0 at frame0 (x=0), HS1 at frame50 (x=0.8 -> stride 0.8),
+    # HS2 at frame100 (x=5.8 -> stride 5.0, implausible)
+    df.loc[0, "left_heel_x"] = 0.0
+    df.loc[50, "left_heel_x"] = 0.8
+    df.loc[100, "left_heel_x"] = 5.8
+    events = {
+        "left_HS": [0, 50, 100], "left_TO": [30, 80],
+        "right_HS": [25, 75], "right_TO": [55, 105],
+    }
+    out = calc_spatiotemporal(df, events, fps=50.0, max_stride_m=1.5, max_step_m=1.0)
+    # only the 0.8 m stride survives
+    assert out["stride_length_m"] == pytest.approx(0.8, abs=0.05)
+    assert out["n_strides_used"] == 1
+    assert out["n_strides_total"] == 2
+
+
+def test_stride_rejection_keeps_all_when_plausible():
+    df, fps = _constant_velocity_walk()
+    events = {"left_HS": [0, 50, 100, 150], "left_TO": [30, 80, 130],
+              "right_HS": [25, 75, 125], "right_TO": [55, 105, 155]}
+    out = calc_spatiotemporal(df, events, fps=fps, max_stride_m=1.5, max_step_m=1.0)
+    assert out["n_strides_used"] == out["n_strides_total"] == 3

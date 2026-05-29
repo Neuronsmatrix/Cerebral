@@ -19,8 +19,29 @@ def _travel_axis(positions: np.ndarray) -> np.ndarray:
 
 
 def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
-                        vertical: str = "z") -> dict:
+                        vertical: str = "z",
+                        max_stride_m: float = 1.5,
+                        max_step_m: float = 1.0) -> dict:
     """Compute cadence, speed, stride/step length, step width, stance/swing %.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Landmark coordinate data with a ``timestamp`` column.
+    events : dict
+        Gait event frame indices, e.g. ``left_HS``, ``right_HS``, etc.
+    fps : float
+        Frames per second of the recording.
+    vertical : str
+        Which axis is vertical (excluded from horizontal heel positions).
+    max_stride_m : float
+        Physiological ceiling for stride length (m). Strides longer than this
+        are rejected before averaging to discard corrupted end-of-recording
+        tracking failures. Default 1.5 m.
+    max_step_m : float
+        Physiological ceiling for step length (m). Steps longer than this are
+        rejected (both length and width of the offending step are excluded).
+        Default 1.0 m.
 
     KNOWN LIMITATIONS (Phase 1):
     - ``stance_pct`` / ``swing_pct`` / ``double_support_pct`` derive from the
@@ -29,10 +50,11 @@ def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
       parameters are therefore systematically biased until ``detect_gait_events``
       gains a kinematic/velocity TO estimator (validated against Vicon in a
       later phase). Cadence/speed/stride/step length are unaffected.
-    - ``step_length_m`` is sensitive to finite tracking artifacts in heel
-      position that survive gap-filling (``fill_gaps`` only fills NaN, not
-      finite outliers); values well outside ~0.2-0.9 m should be treated as
-      suspect.
+    - Stride and step lengths reject individual values above ``max_stride_m`` /
+      ``max_step_m`` (physiological ceilings, configurable) before averaging,
+      discarding end-of-recording tracking failures. ``n_strides_used`` and
+      ``n_strides_total`` report how many strides survived rejection; watch for
+      thin post-rejection samples (e.g. n=2).
     - ``cadence_steps_per_min`` / ``speed_m_per_s`` use the full recording
       duration (first to last frame) as the denominator, which includes any
       non-stepping lead-in/lead-out and slightly underestimates cadence
@@ -51,9 +73,12 @@ def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
     heel_left = _heel_xy(df, "left", vertical)
     travel = _travel_axis(heel_left)
 
-    strides = []
+    strides_all = []
     for a, b in zip(left_hs[:-1], left_hs[1:]):
-        strides.append(np.linalg.norm(heel_left[b] - heel_left[a]))
+        strides_all.append(np.linalg.norm(heel_left[b] - heel_left[a]))
+    n_strides_total = len(strides_all)
+    strides = [d for d in strides_all if d <= max_stride_m]
+    n_strides_used = len(strides)
     stride_length = float(np.mean(strides)) if strides else np.nan
 
     speed = (stride_length * cadence / 120.0
@@ -65,8 +90,10 @@ def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
     for hs in right_hs:
         if hs < len(heel_right) and hs < len(heel_left):
             vec = heel_right[hs] - heel_left[hs]
-            step_lengths.append(abs(np.dot(vec, travel)))
-            step_widths.append(abs(np.dot(vec, perp)))
+            sl = abs(np.dot(vec, travel))
+            if sl <= max_step_m:
+                step_lengths.append(sl)
+                step_widths.append(abs(np.dot(vec, perp)))
     step_length = float(np.nanmean(step_lengths)) if step_lengths else np.nan
     step_width = float(np.nanmean(step_widths)) if step_widths else np.nan
 
@@ -90,4 +117,6 @@ def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
         "stance_pct": stance_pct,
         "swing_pct": swing_pct,
         "double_support_pct": double_support_pct,
+        "n_strides_used": int(n_strides_used),
+        "n_strides_total": int(n_strides_total),
     }

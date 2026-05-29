@@ -42,6 +42,7 @@ def analyze(session_dir: str, model: str, out_path: str) -> dict:
     cfg = _load_settings()
     proc = cfg["processing"]
     gcfg = cfg["gait_events"]
+    scfg = cfg.get("spatiotemporal", {})
 
     df = load_caliscope_session(session_dir, model=model)
     fps = df.attrs["fps"]
@@ -57,7 +58,9 @@ def analyze(session_dir: str, model: str, out_path: str) -> dict:
     )
     df = calc_joint_angles_timeseries(df)
     spatiotemporal = calc_spatiotemporal(df, events, fps=fps,
-                                         vertical=gcfg["vertical_axis"])
+                                         vertical=gcfg["vertical_axis"],
+                                         max_stride_m=scfg.get("max_stride_m", 1.5),
+                                         max_step_m=scfg.get("max_step_m", 1.0))
 
     angles_mean, angles_std = {}, {}
     for side in ("left", "right"):

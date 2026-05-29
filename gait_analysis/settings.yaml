@@ -30,6 +30,10 @@ landmark_mapping:                     # Vicon marker -> canonical landmark
   LTOE: left_foot_index
   RTOE: right_foot_index
 
+spatiotemporal:
+  max_stride_m: 1.5    # reject strides longer than this (end-of-recording tracking failures)
+  max_step_m: 1.0      # reject steps longer than this
+
 comparison:
   icc_type: '3,1'
   good_rmse_threshold_deg: 5.0
