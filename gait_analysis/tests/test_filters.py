@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from modules.kinematics.filters import fill_gaps
+
+from modules.kinematics.filters import butterworth_filter, fill_gaps
 
 
 def test_fill_gaps_fills_short_interior_gap_on_linear_ramp():
@@ -27,9 +28,6 @@ def test_fill_gaps_ignores_non_coordinate_columns():
     out = fill_gaps(df, max_gap_frames=5)
     assert list(out["frame"]) == [0, 1, 2, 3, 4]
     assert out["left_hip_x"].iloc[1] == pytest.approx(2.0)
-
-
-from modules.kinematics.filters import butterworth_filter
 
 
 def test_butterworth_attenuates_high_freq_keeps_low_freq():
