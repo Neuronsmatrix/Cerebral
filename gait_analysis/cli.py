@@ -76,7 +76,7 @@ def analyze(session_dir: str, model: str, out_path: str) -> dict:
         "model": model,
         "fps": round(float(fps), 3),
         "n_frames": int(len(df)),
-        "processed_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "processed_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "gait_events": {k: list(map(int, v)) for k, v in events.items()},
         "spatiotemporal": {k: (None if v is None or (isinstance(v, float) and np.isnan(v))
                                else round(float(v), 3))
@@ -118,6 +118,7 @@ def reproducibility(recordings_dir: str, sessions: list[str], model: str,
 
     out = {"model": model, "sessions": sessions,
            "per_session": per_session, "cv_percent": cv_percent}
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     Path(out_path).write_text(json.dumps(out, indent=2))
     return out
 
