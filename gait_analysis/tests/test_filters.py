@@ -27,3 +27,25 @@ def test_fill_gaps_ignores_non_coordinate_columns():
     out = fill_gaps(df, max_gap_frames=5)
     assert list(out["frame"]) == [0, 1, 2, 3, 4]
     assert out["left_hip_x"].iloc[1] == pytest.approx(2.0)
+
+
+from modules.kinematics.filters import butterworth_filter
+
+
+def test_butterworth_attenuates_high_freq_keeps_low_freq():
+    fs = 100.0
+    t = np.arange(0, 2.0, 1 / fs)
+    low = np.sin(2 * np.pi * 1.0 * t)          # 1 Hz (pass)
+    high = 0.5 * np.sin(2 * np.pi * 20.0 * t)  # 20 Hz (stop)
+    out = butterworth_filter(low + high, cutoff_hz=6.0, fs=fs, order=4)
+    assert out.shape == low.shape
+    err_low = np.sqrt(np.mean((out - low) ** 2))
+    assert err_low < 0.1
+
+
+def test_butterworth_zero_phase_no_lag_on_symmetric_pulse():
+    fs = 100.0
+    x = np.zeros(200)
+    x[100] = 1.0  # symmetric impulse
+    out = butterworth_filter(x, cutoff_hz=10.0, fs=fs, order=4, zero_phase=True)
+    assert int(np.argmax(out)) == 100

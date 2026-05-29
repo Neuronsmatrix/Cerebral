@@ -48,3 +48,19 @@ def fill_gaps(df: pd.DataFrame, max_gap_frames: int = 10) -> pd.DataFrame:
                 filled[start:end] = np.nan
         out[col] = filled
     return out
+
+
+def butterworth_filter(signal: np.ndarray, cutoff_hz: float = 6.0,
+                       fs: float = 30.0, order: int = 4,
+                       zero_phase: bool = True) -> np.ndarray:
+    """Low-pass Butterworth filter. Default ``zero_phase`` uses ``filtfilt``
+    (no phase lag). ``signal`` must be NaN-free (run ``fill_gaps`` first).
+    """
+    signal = np.asarray(signal, dtype=float)
+    nyq = 0.5 * fs
+    wn = min(cutoff_hz / nyq, 0.99)
+    b, a = butter(order, wn, btype="low")
+    if not zero_phase:
+        from scipy.signal import lfilter
+        return lfilter(b, a, signal)
+    return filtfilt(b, a, signal, padtype="odd")
