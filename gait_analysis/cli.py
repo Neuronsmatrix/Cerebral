@@ -124,18 +124,19 @@ def reproducibility(recordings_dir: str, sessions: list[str], model: str,
 
 
 def main():
+    default_model = _load_settings()["processing"]["default_model"]
     p = argparse.ArgumentParser(description="Gait analysis CLI")
     sub = p.add_subparsers(dest="command", required=True)
 
     a = sub.add_parser("analyze", help="Run the full pipeline on one session")
     a.add_argument("--session", required=True)
-    a.add_argument("--model", default="SIMPLE_HOLISTIC")
+    a.add_argument("--model", default=default_model)
     a.add_argument("--out", required=True)
 
     r = sub.add_parser("reproducibility", help="Level-B CV across sessions")
     r.add_argument("--recordings", required=True)
     r.add_argument("--sessions", required=True, help="comma-separated session names")
-    r.add_argument("--model", default="SIMPLE_HOLISTIC")
+    r.add_argument("--model", default=default_model)
     r.add_argument("--out", required=True)
 
     args = p.parse_args()

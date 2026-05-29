@@ -27,8 +27,8 @@ def test_analyze_writes_gait_results(tmp_path):
     assert data["fps"] > 0
     assert "gait_events" in data and "spatiotemporal" in data
     assert "left_HS" in data["gait_events"]
-    if data["joint_angles_mean"].get("left_knee"):
-        assert len(data["joint_angles_mean"]["left_knee"]) == 101
+    assert len(data["gait_events"]["left_HS"]) >= 3  # criterion #3: events found
+    assert len(data["joint_angles_mean"]["left_knee"]) == 101
 
 
 RECORDINGS = GAIT / "data" / "caliscope_project" / "recordings"
@@ -48,3 +48,5 @@ def test_reproducibility_computes_cv(tmp_path):
     assert len(data["per_session"]) == 5
     assert "cadence_steps_per_min" in data["cv_percent"]
     assert all("n_left_cycles" in s for s in data["per_session"].values())
+    assert data["cv_percent"]["cadence_steps_per_min"] is not None
+    assert data["cv_percent"]["cadence_steps_per_min"] < 15.0  # criterion #6 (cadence)
