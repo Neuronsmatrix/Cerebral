@@ -29,3 +29,22 @@ def test_analyze_writes_gait_results(tmp_path):
     assert "left_HS" in data["gait_events"]
     if data["joint_angles_mean"].get("left_knee"):
         assert len(data["joint_angles_mean"]["left_knee"]) == 101
+
+
+RECORDINGS = GAIT / "data" / "caliscope_project" / "recordings"
+HAVE_P1 = all((RECORDINGS / f"p1_{i}").exists() for i in range(1, 6))
+
+
+@pytest.mark.skipif(not HAVE_P1, reason="p1_1..p1_5 not present")
+def test_reproducibility_computes_cv(tmp_path):
+    out = tmp_path / "repro.json"
+    cmd = [sys.executable, str(GAIT / "cli.py"), "reproducibility",
+           "--recordings", str(RECORDINGS), "--model", "SIMPLE_HOLISTIC",
+           "--sessions", "p1_1,p1_2,p1_3,p1_4,p1_5", "--out", str(out)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(GAIT))
+    assert proc.returncode == 0, proc.stderr
+    data = json.loads(out.read_text())
+    assert "per_session" in data and "cv_percent" in data
+    assert len(data["per_session"]) == 5
+    assert "cadence_steps_per_min" in data["cv_percent"]
+    assert all("n_left_cycles" in s for s in data["per_session"].values())
