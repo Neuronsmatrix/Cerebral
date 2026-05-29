@@ -9,7 +9,7 @@ def normalize_gait_cycle(signal: np.ndarray, events: dict, side: str,
     Returns a ``[n_cycles x n_points]`` matrix.
     """
     signal = np.asarray(signal, dtype=float)
-    hs = sorted(events[f"{side}_HS"])
+    hs = sorted(events.get(f"{side}_HS", []))
     target = np.linspace(0.0, 1.0, n_points)
     cycles = []
     for start, end in zip(hs[:-1], hs[1:]):

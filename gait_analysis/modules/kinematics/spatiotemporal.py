@@ -20,7 +20,20 @@ def _travel_axis(positions: np.ndarray) -> np.ndarray:
 
 def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
                         vertical: str = "z") -> dict:
-    """Compute cadence, speed, stride/step length, step width, stance/swing %."""
+    """Compute cadence, speed, stride/step length, step width, stance/swing %.
+
+    KNOWN LIMITATIONS (Phase 1):
+    - ``stance_pct`` / ``swing_pct`` / ``double_support_pct`` derive from the
+      upstream toe-off estimator, which currently detects the mid-swing
+      toe-height maximum rather than true toe-off. These temporal phase
+      parameters are therefore systematically biased until ``detect_gait_events``
+      gains a kinematic/velocity TO estimator (validated against Vicon in a
+      later phase). Cadence/speed/stride/step length are unaffected.
+    - ``step_length_m`` is sensitive to finite tracking artifacts in heel
+      position that survive gap-filling (``fill_gaps`` only fills NaN, not
+      finite outliers); values well outside ~0.2-0.9 m should be treated as
+      suspect.
+    """
     timestamps = df["timestamp"].to_numpy()
     left_hs = sorted(events.get("left_HS", []))
     right_hs = sorted(events.get("right_HS", []))
@@ -49,8 +62,8 @@ def calc_spatiotemporal(df: pd.DataFrame, events: dict, fps: float,
             vec = heel_right[hs] - heel_left[hs]
             step_lengths.append(abs(np.dot(vec, travel)))
             step_widths.append(abs(np.dot(vec, perp)))
-    step_length = float(np.mean(step_lengths)) if step_lengths else np.nan
-    step_width = float(np.mean(step_widths)) if step_widths else np.nan
+    step_length = float(np.nanmean(step_lengths)) if step_lengths else np.nan
+    step_width = float(np.nanmean(step_widths)) if step_widths else np.nan
 
     left_to = sorted(events.get("left_TO", []))
     stance_fracs = []
