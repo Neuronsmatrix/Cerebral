@@ -1,0 +1,17 @@
+# Large raw data (caliscope project: ~hundreds of MB of MP4 + CSV) — not version-controlled
+caliscope_project_271025/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Results / outputs
+results/
+*.log
