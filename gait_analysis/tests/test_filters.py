@@ -47,3 +47,23 @@ def test_butterworth_zero_phase_no_lag_on_symmetric_pulse():
     x[100] = 1.0  # symmetric impulse
     out = butterworth_filter(x, cutoff_hz=10.0, fs=fs, order=4, zero_phase=True)
     assert int(np.argmax(out)) == 100
+
+
+def test_butterworth_causal_differs_from_zero_phase():
+    fs = 100.0
+    t = np.arange(0, 2.0, 1 / fs)
+    x = np.sin(2 * np.pi * 2.0 * t)
+    out_zp = butterworth_filter(x, cutoff_hz=6.0, fs=fs, zero_phase=True)
+    out_causal = butterworth_filter(x, cutoff_hz=6.0, fs=fs, zero_phase=False)
+    assert out_causal.shape == x.shape
+    assert not np.allclose(out_zp, out_causal)
+
+
+def test_butterworth_raises_when_cutoff_at_or_above_nyquist():
+    with pytest.raises(ValueError):
+        butterworth_filter(np.zeros(50), cutoff_hz=60.0, fs=100.0)
+
+
+def test_butterworth_raises_on_too_short_signal_for_filtfilt():
+    with pytest.raises(ValueError):
+        butterworth_filter(np.zeros(10), cutoff_hz=6.0, fs=100.0, order=4)

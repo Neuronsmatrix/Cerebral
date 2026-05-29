@@ -55,12 +55,25 @@ def butterworth_filter(signal: np.ndarray, cutoff_hz: float = 6.0,
                        zero_phase: bool = True) -> np.ndarray:
     """Low-pass Butterworth filter. Default ``zero_phase`` uses ``filtfilt``
     (no phase lag). ``signal`` must be NaN-free (run ``fill_gaps`` first).
+
+    Raises ``ValueError`` if ``cutoff_hz`` is not below the Nyquist frequency,
+    or (zero-phase only) if the signal is too short for ``filtfilt`` padding.
     """
     signal = np.asarray(signal, dtype=float)
     nyq = 0.5 * fs
-    wn = min(cutoff_hz / nyq, 0.99)
+    if cutoff_hz >= nyq:
+        raise ValueError(
+            f"cutoff_hz ({cutoff_hz}) must be below the Nyquist frequency ({nyq} Hz)"
+        )
+    wn = cutoff_hz / nyq
     b, a = butter(order, wn, btype="low")
     if not zero_phase:
         from scipy.signal import lfilter
         return lfilter(b, a, signal)
+    min_len = 3 * (order + 1)  # scipy filtfilt requires len(x) > padlen
+    if len(signal) <= min_len:
+        raise ValueError(
+            f"signal length {len(signal)} too short for zero-phase filtfilt "
+            f"with order={order}; need > {min_len} samples"
+        )
     return filtfilt(b, a, signal, padtype="odd")
