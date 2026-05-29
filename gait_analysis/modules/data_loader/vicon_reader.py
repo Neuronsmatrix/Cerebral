@@ -25,6 +25,8 @@ def load_vicon_xlsx(filepath: str) -> pd.DataFrame:
 
     Marker names live one row above the X/Y/Z axis row, spanning three columns
     each (NAME, "", "").
+    mm->m conversion fires when median(|coord|) > 10, assuming capture volumes
+    smaller than ~10 m (true for clinical labs).
     """
     rows = _read_rows(filepath)
     axis_i = _find_axis_header(rows)
@@ -60,7 +62,7 @@ def load_vicon_xlsx(filepath: str) -> pd.DataFrame:
 
     df = pd.DataFrame(records)
 
-    coord = df[[c for c in df.columns]].to_numpy()
+    coord = df.to_numpy()
     if np.nanmedian(np.abs(coord)) > 10.0:
         df = df / 1000.0
 

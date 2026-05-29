@@ -18,15 +18,18 @@ def load_camera_config(config_path: str) -> dict:
     for key, val in raw.items():
         if not key.startswith("cam_") or not isinstance(val, dict):
             continue
-        m = val["matrix"]
-        out[key] = {
-            "intrinsics": {
-                "fx": m[0][0], "fy": m[1][1], "cx": m[0][2], "cy": m[1][2],
-                "distortion": list(val["distortions"]),
-            },
-            "extrinsics": {
-                "R": Rotation.from_rotvec(val["rotation"]).as_matrix(),
-                "T": np.asarray(val["translation"], dtype=float),
-            },
-        }
+        try:
+            m = val["matrix"]
+            out[key] = {
+                "intrinsics": {
+                    "fx": m[0][0], "fy": m[1][1], "cx": m[0][2], "cy": m[1][2],
+                    "distortion": list(val["distortions"]),
+                },
+                "extrinsics": {
+                    "R": Rotation.from_rotvec(val["rotation"]).as_matrix(),
+                    "T": np.asarray(val["translation"], dtype=float),
+                },
+            }
+        except KeyError as exc:
+            raise KeyError(f"Camera {key!r} is missing config field {exc}") from exc
     return out
