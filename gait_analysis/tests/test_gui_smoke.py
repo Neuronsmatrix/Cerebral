@@ -40,3 +40,15 @@ def test_plot_widget_renders_angles(qtbot):
     w.render_angles(results["joint_angles_mean"], results["joint_angles_std"])
     assert w.current_figure.axes                     # axes exist after render
     assert any(ax.lines for ax in w.current_figure.axes)   # at least one curve drawn
+
+
+def test_skeleton_widget_sets_frames(qtbot):
+    try:
+        from gui.widgets.skeleton_widget import SkeletonWidget
+        w = SkeletonWidget()
+    except Exception as exc:                 # vispy/GL unavailable in this env
+        pytest.skip(f"vispy widget unavailable: {exc}")
+    _, df = fixture_results_df()
+    w.set_data(df)
+    assert w.n_frames == len(df)
+    w.set_frame(5)                            # must not raise
