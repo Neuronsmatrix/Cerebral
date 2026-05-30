@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -118,3 +120,24 @@ def test_analyze_panel_quality_line_only_flags_gait_landmarks(qtbot):
     text = panel.quality.text()
     assert "nose_tip" not in text
     assert "left_foot_index" in text
+
+
+_P1_3 = Path(__file__).resolve().parents[1] / "data" / "caliscope_project" / "recordings" / "p1_3"
+
+
+@pytest.mark.skipif(not _P1_3.exists(), reason="p1_3 caliscope data not present")
+def test_real_thread_run_completes_and_rearms(qtbot):
+    try:
+        from gui.main_window import MainWindow
+        win = MainWindow()
+    except Exception as exc:                 # vispy/GL unavailable
+        pytest.skip(f"vispy widget unavailable: {exc}")
+    qtbot.addWidget(win)
+    panel = win.analyze
+    panel._folder = str(_P1_3)
+    with qtbot.waitSignal(panel.analysis_done, timeout=30000):
+        panel._run()                          # real QThread + worker + pipeline
+    qtbot.waitUntil(lambda: not panel._thread.isRunning(), timeout=5000)
+    assert panel.run_btn.isEnabled()          # re-armed only after thread fully stopped
+    assert panel.table.rowCount() > 0         # results populated
+    assert win.viz.slider.maximum() > 0       # data routed into the viz tab

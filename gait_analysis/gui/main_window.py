@@ -20,3 +20,10 @@ class MainWindow(QMainWindow):
         self.analyze.analysis_done.connect(self.viz.set_data)
         self.analyze.analysis_done.connect(
             lambda *_: self.statusBar().showMessage("Analysis complete"))
+
+    def closeEvent(self, event):
+        thread = getattr(self.analyze, "_thread", None)
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            thread.wait()
+        super().closeEvent(event)

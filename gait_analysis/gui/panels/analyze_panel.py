@@ -115,6 +115,7 @@ class AnalyzePanel(QWidget):
         self._worker.error.connect(self._on_error)
         self._worker.finished.connect(self._thread.quit)
         self._worker.error.connect(self._thread.quit)
+        self._thread.finished.connect(lambda: self.run_btn.setEnabled(True))
         self._thread.start()
 
     def _on_progress(self, frac, stage):
@@ -128,13 +129,11 @@ class AnalyzePanel(QWidget):
             self.table.setItem(row, 0, QTableWidgetItem(k))
             self.table.setItem(row, 1, QTableWidgetItem("" if v is None else str(v)))
         self._fill_quality(results, df)
-        self.run_btn.setEnabled(True)
         self.csv_btn.setEnabled(True)
         self.xlsx_btn.setEnabled(True)
         self.analysis_done.emit(results, df)
 
     def _on_error(self, msg):
-        self.run_btn.setEnabled(True)
         QMessageBox.warning(self, "Analysis failed", msg)
 
     def _fill_quality(self, results, df):
