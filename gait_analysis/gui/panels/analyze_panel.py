@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.worker import PipelineWorker
-from modules.data_loader.landmarks import MODELS
+from modules.data_loader.landmarks import GAIT_LANDMARKS, MODELS
 
 GAIT_DIR = Path(__file__).resolve().parents[2]      # gait_analysis/
 
@@ -142,11 +142,12 @@ class AnalyzePanel(QWidget):
         n = results.get("n_frames", len(df))
         duration = round(n / fps, 1) if fps else 0
         bad = []
-        for col in df.columns:
-            if col.endswith("_x"):
+        for name in GAIT_LANDMARKS:
+            col = f"{name}_x"
+            if col in df.columns:
                 frac = float(np.isnan(df[col].to_numpy()).mean())
                 if frac > 0.05:
-                    bad.append(f"{col[:-2]} ({frac * 100:.0f}%)")
+                    bad.append(f"{name} ({frac * 100:.0f}%)")
         warn = ("  ⚠ >5% NaN: " + ", ".join(bad)) if bad else ""
         self.quality.setText(f"frames {n} · fps {fps} · {duration}s{warn}")
 

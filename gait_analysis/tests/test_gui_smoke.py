@@ -98,3 +98,23 @@ def test_main_window_has_two_tabs_and_routes_results(qtbot):
     results, df = fixture_results_df()
     win.analyze._on_finished(results, df)            # emits analysis_done
     assert win.viz.slider.maximum() == len(df) - 1   # routed into the Viz tab
+
+
+def test_analyze_panel_quality_line_only_flags_gait_landmarks(qtbot):
+    from gui.panels.analyze_panel import AnalyzePanel
+    panel = AnalyzePanel()
+    qtbot.addWidget(panel)
+    results, df = fixture_results_df()
+    df = df.copy()
+    # a non-gait landmark that is entirely untracked must NOT appear in the warning
+    df["nose_tip_x"] = np.nan
+    df["nose_tip_y"] = np.nan
+    df["nose_tip_z"] = np.nan
+    # a gait landmark that is untracked MUST appear in the warning
+    df["left_foot_index_x"] = np.nan
+    df["left_foot_index_y"] = np.nan
+    df["left_foot_index_z"] = np.nan
+    panel._on_finished(results, df)
+    text = panel.quality.text()
+    assert "nose_tip" not in text
+    assert "left_foot_index" in text
