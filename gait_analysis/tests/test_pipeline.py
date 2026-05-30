@@ -48,3 +48,13 @@ def test_run_pipeline_calls_progress_callback_to_completion():
     fracs = [f for f, _ in seen]
     assert fracs == sorted(fracs)        # monotonically non-decreasing
     assert fracs[-1] == 1.0              # reaches completion
+
+
+def test_spatiotemporal_values_are_json_serializable():
+    import json
+    df = _synthetic_walk()
+    results, _ = run_pipeline(df, CFG, model="SIMPLE_HOLISTIC", session_id="synth")
+    serialized = json.dumps(results)          # must not raise — nan must never reach JSON
+    loaded = json.loads(serialized)
+    for v in loaded["spatiotemporal"].values():
+        assert v is None or isinstance(v, (int, float))
