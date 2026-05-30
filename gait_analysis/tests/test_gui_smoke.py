@@ -85,3 +85,16 @@ def test_viz_panel_set_data_wires_slider_and_plots(qtbot):
     panel.set_data(results, df)
     assert panel.slider.maximum() == len(df) - 1
     assert panel.plots.current_figure.axes        # plots rendered
+
+
+def test_main_window_has_two_tabs_and_routes_results(qtbot):
+    try:
+        from gui.main_window import MainWindow
+        win = MainWindow()
+    except Exception as exc:                 # vispy/GL unavailable (VizPanel)
+        pytest.skip(f"vispy widget unavailable: {exc}")
+    qtbot.addWidget(win)
+    assert win.centralWidget().count() == 2
+    results, df = fixture_results_df()
+    win.analyze._on_finished(results, df)            # emits analysis_done
+    assert win.viz.slider.maximum() == len(df) - 1   # routed into the Viz tab
