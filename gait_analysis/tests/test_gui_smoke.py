@@ -72,3 +72,16 @@ def test_analyze_panel_emits_analysis_done(qtbot):
     results, df = fixture_results_df()
     with qtbot.waitSignal(panel.analysis_done, timeout=1000):
         panel._on_finished(results, df)
+
+
+def test_viz_panel_set_data_wires_slider_and_plots(qtbot):
+    try:
+        from gui.panels.viz_panel import VizPanel
+        panel = VizPanel()
+    except Exception as exc:                 # vispy/GL unavailable
+        pytest.skip(f"vispy widget unavailable: {exc}")
+    qtbot.addWidget(panel)
+    results, df = fixture_results_df()
+    panel.set_data(results, df)
+    assert panel.slider.maximum() == len(df) - 1
+    assert panel.plots.current_figure.axes        # plots rendered
