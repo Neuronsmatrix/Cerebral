@@ -30,3 +30,13 @@ def test_worker_error_path_emits_error():
     worker.error.connect(errors.append)
     worker.run()
     assert errors          # bad folder -> error signal, no crash, no exception escapes
+
+
+def test_plot_widget_renders_angles(qtbot):
+    from gui.widgets.plot_widget import PlotWidget
+    w = PlotWidget()
+    qtbot.addWidget(w)
+    results, _ = fixture_results_df()
+    w.render_angles(results["joint_angles_mean"], results["joint_angles_std"])
+    assert w.current_figure.axes                     # axes exist after render
+    assert any(ax.lines for ax in w.current_figure.axes)   # at least one curve drawn
