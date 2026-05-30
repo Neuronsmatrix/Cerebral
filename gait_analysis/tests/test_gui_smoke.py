@@ -52,3 +52,23 @@ def test_skeleton_widget_sets_frames(qtbot):
     w.set_data(df)
     assert w.n_frames == len(df)
     w.set_frame(5)                            # must not raise
+
+
+def test_analyze_panel_fills_table_and_quality_on_finished(qtbot):
+    from gui.panels.analyze_panel import AnalyzePanel
+    panel = AnalyzePanel()
+    qtbot.addWidget(panel)
+    results, df = fixture_results_df()
+    panel._on_finished(results, df)
+    assert panel.table.rowCount() == len(results["spatiotemporal"])
+    assert panel.csv_btn.isEnabled() and panel.xlsx_btn.isEnabled()
+    assert "frames 20" in panel.quality.text()
+
+
+def test_analyze_panel_emits_analysis_done(qtbot):
+    from gui.panels.analyze_panel import AnalyzePanel
+    panel = AnalyzePanel()
+    qtbot.addWidget(panel)
+    results, df = fixture_results_df()
+    with qtbot.waitSignal(panel.analysis_done, timeout=1000):
+        panel._on_finished(results, df)
