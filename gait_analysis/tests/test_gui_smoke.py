@@ -179,3 +179,12 @@ def test_viz_panel_playback_interval_uses_capture_fps(qtbot):
     # 1x playback must track the recording's fps, not a hardcoded 30.
     assert panel._frame_interval_ms(1.0) == max(1, int(1000 / 19.0))
     assert panel._frame_interval_ms(0.5) == max(1, int(1000 / (19.0 * 0.5)))
+
+
+def test_overlay_worker_error_path_emits_error():
+    from gui.overlay_worker import OverlayWorker
+    worker = OverlayWorker("/nonexistent/session/folder", "SIMPLE_HOLISTIC", "/tmp/none")
+    errors = []
+    worker.error.connect(errors.append)
+    worker.run()
+    assert errors          # missing videos/xy -> error signal, no crash
