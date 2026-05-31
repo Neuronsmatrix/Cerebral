@@ -36,10 +36,10 @@ def test_frame_marks_skips_nan_coords():
     assert frame_marks(xy, port=1, frame_index=0) == {}
 
 
-def test_draw_overlay_sets_pixels_and_preserves_shape():
-    frame = np.zeros((300, 300, 3), dtype=np.uint8)
+def test_draw_overlay_draws_bones_and_joints_preserving_shape():
+    frame = np.full((300, 300, 3), 128, dtype=np.uint8)   # gray bg: black bones show as a change
     marks = {"left_hip": (100, 150), "left_knee": (100, 250)}
     out = draw_overlay(frame, marks, edges=[("left_hip", "left_knee")])
     assert out.shape == (300, 300, 3)
-    assert out[150, 100].sum() > 0             # joint drawn
-    assert out[200, 100].sum() > 0             # bone midpoint drawn
+    assert tuple(int(c) for c in out[150, 100]) != (128, 128, 128)   # joint drawn
+    assert tuple(int(c) for c in out[200, 100]) != (128, 128, 128)   # bone midpoint drawn

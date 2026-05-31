@@ -17,7 +17,7 @@ POSE_POINT_IDS = {
 }
 
 _JOINT_COLOR = (0, 0, 255)   # red (BGR)
-_BONE_COLOR = (255, 255, 255)   # white
+_BONE_COLOR = (0, 0, 0)      # black
 
 
 def load_xy(session_dir, model):
