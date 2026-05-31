@@ -165,3 +165,17 @@ def test_configure_opengl_requests_compatibility_profile():
                 == QSurfaceFormat.OpenGLContextProfile.CompatibilityProfile)
     finally:
         QSurfaceFormat.setDefaultFormat(prev)
+
+
+def test_viz_panel_playback_interval_uses_capture_fps(qtbot):
+    try:
+        from gui.panels.viz_panel import VizPanel
+        panel = VizPanel()
+    except Exception as exc:                 # vispy/GL unavailable
+        pytest.skip(f"vispy widget unavailable: {exc}")
+    qtbot.addWidget(panel)
+    results, df = fixture_results_df()       # fps 19.0
+    panel.set_data(results, df)
+    # 1x playback must track the recording's fps, not a hardcoded 30.
+    assert panel._frame_interval_ms(1.0) == max(1, int(1000 / 19.0))
+    assert panel._frame_interval_ms(0.5) == max(1, int(1000 / (19.0 * 0.5)))

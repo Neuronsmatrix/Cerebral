@@ -5,7 +5,12 @@ import vispy
 vispy.use(app="pyqt6")
 from vispy import scene  # noqa: E402
 
-from modules.visualization.skeleton_3d import frame_points, segment_lines  # noqa: E402
+from modules.visualization.skeleton_3d import (  # noqa: E402
+    SKELETON_LANDMARKS,
+    bounds,
+    frame_points,
+    segment_lines,
+)
 
 
 class SkeletonWidget:
@@ -31,12 +36,19 @@ class SkeletonWidget:
     def set_data(self, df):
         self._df = df
         self.set_frame(0)
-        self.view.camera.set_range()
+        # Frame the whole walk once, at a stable scale, so the skeleton does not
+        # translate out of view as the subject moves across the capture volume.
+        bb = bounds(df)
+        if bb is not None:
+            (x0, y0, z0), (x1, y1, z1) = bb
+            self.view.camera.set_range(x=(x0, x1), y=(y0, y1), z=(z0, z1), margin=0.15)
+        else:
+            self.view.camera.set_range()
 
     def set_frame(self, i):
         if self._df is None or not (0 <= i < len(self._df)):
             return
-        pts = frame_points(self._df, i)
+        pts = frame_points(self._df, i, names=SKELETON_LANDMARKS)
         if pts:
             coords = np.array(list(pts.values()), dtype=np.float32)
             self.markers.set_data(coords, size=8, face_color="red")

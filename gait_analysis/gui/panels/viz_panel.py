@@ -30,6 +30,7 @@ class VizPanel(QWidget):
         self.export_btn = QPushButton("Export PNG")
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance)
+        self._fps = None    # capture fps; playback matches the real recording duration
 
         controls = QHBoxLayout()
         controls.addWidget(self.play_btn)
@@ -46,11 +47,17 @@ class VizPanel(QWidget):
         self.export_btn.clicked.connect(self._export_png)
 
     def set_data(self, results, df):
+        self._fps = results.get("fps")
         self.skeleton.set_data(df)
         self.slider.setRange(0, max(0, len(df) - 1))
         self.slider.setValue(0)
         self.plots.render_angles(results.get("joint_angles_mean", {}),
                                  results.get("joint_angles_std", {}))
+
+    def _frame_interval_ms(self, factor):
+        """Per-frame timer interval so 1x playback matches the recording's real duration."""
+        fps = self._fps if self._fps and self._fps > 0 else 30.0
+        return max(1, int(1000 / (fps * factor)))
 
     def _toggle_play(self):
         if self._timer.isActive():
@@ -58,7 +65,7 @@ class VizPanel(QWidget):
             self.play_btn.setText("▶")
         else:
             factor = _SPEEDS[self.speed.currentText()]
-            self._timer.start(int(1000 / (30 * factor)))
+            self._timer.start(self._frame_interval_ms(factor))
             self.play_btn.setText("⏸")
 
     def _advance(self):
