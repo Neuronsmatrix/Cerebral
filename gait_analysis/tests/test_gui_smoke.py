@@ -141,3 +141,27 @@ def test_real_thread_run_completes_and_rearms(qtbot):
     assert panel.run_btn.isEnabled()          # re-armed only after thread fully stopped
     assert panel.table.rowCount() > 0         # results populated
     assert win.viz.slider.maximum() > 0       # data routed into the viz tab
+
+
+def test_platform_reroutes_wayland_to_xcb():
+    # vispy's GLSL 1.20 shaders fail on the core-profile context Wayland/EGL gives
+    # NVIDIA; xcb (XWayland/GLX) provides a compatible context. offscreen is preserved.
+    from app import _platform_for
+    assert _platform_for("") == "xcb"
+    assert _platform_for("wayland") == "xcb"
+    assert _platform_for("wayland;xcb") == "xcb"
+    assert _platform_for("offscreen") == "offscreen"
+    assert _platform_for("xcb") == "xcb"
+
+
+def test_configure_opengl_requests_compatibility_profile():
+    from PyQt6.QtGui import QSurfaceFormat
+
+    import app
+    prev = QSurfaceFormat.defaultFormat()
+    try:
+        app.configure_opengl()
+        assert (QSurfaceFormat.defaultFormat().profile()
+                == QSurfaceFormat.OpenGLContextProfile.CompatibilityProfile)
+    finally:
+        QSurfaceFormat.setDefaultFormat(prev)
