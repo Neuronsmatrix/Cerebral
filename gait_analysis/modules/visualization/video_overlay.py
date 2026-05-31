@@ -60,6 +60,7 @@ def produce_marked_video(video_path, xy_df, port, out_path, progress_cb=None):
     Reads the raw video frame-by-frame; frame N gets the marks for (port, frame_index=N).
     Source fps + resolution are preserved. Returns the output Path.
     """
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"cannot open video: {video_path}")
@@ -67,7 +68,6 @@ def produce_marked_video(video_path, xy_df, port, out_path, progress_cb=None):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"),
                              fps, (width, height))
     if not writer.isOpened():

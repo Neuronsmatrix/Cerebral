@@ -187,6 +187,7 @@ class AnalyzePanel(QWidget):
         self._overlay_thread.start()
 
     def _on_videos_done(self, paths):
+        self.progress.setValue(100)
         where = paths[0].parent if paths else "(none)"
         QMessageBox.information(self, "Marked videos",
                                f"Saved {len(paths)} videos to:\n{where}")
