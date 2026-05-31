@@ -50,3 +50,15 @@ def test_reproducibility_computes_cv(tmp_path):
     assert all("n_left_cycles" in s for s in data["per_session"].values())
     assert data["cv_percent"]["cadence_steps_per_min"] is not None
     assert data["cv_percent"]["cadence_steps_per_min"] < 15.0  # criterion #6 (cadence)
+
+
+@pytest.mark.skipif(not (SESSION / "port_1.mp4").exists(),
+                    reason="p1_3 raw videos not present")
+def test_produce_videos_cli_writes_marked_mp4s(tmp_path):
+    cmd = [sys.executable, str(GAIT / "cli.py"), "produce-videos",
+           "--session", str(SESSION), "--model", "SIMPLE_HOLISTIC",
+           "--out", str(tmp_path)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(GAIT))
+    assert proc.returncode == 0, proc.stderr
+    written = list(tmp_path.glob("port_*_marked.mp4"))
+    assert len(written) >= 1

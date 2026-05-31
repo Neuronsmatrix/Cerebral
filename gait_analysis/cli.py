@@ -7,6 +7,7 @@ import numpy as np
 import yaml
 
 from modules.data_loader.caliscope_reader import load_caliscope_session
+from modules.visualization.video_overlay import produce_marked_videos
 from pipeline import run_pipeline
 
 HERE = Path(__file__).resolve().parent
@@ -76,6 +77,11 @@ def main():
     r.add_argument("--model", default=default_model)
     r.add_argument("--out", required=True)
 
+    v = sub.add_parser("produce-videos", help="Draw the skeleton on each camera video")
+    v.add_argument("--session", required=True)
+    v.add_argument("--model", default=default_model)
+    v.add_argument("--out", required=True)
+
     args = p.parse_args()
     if args.command == "analyze":
         res = analyze(args.session, args.model, args.out)
@@ -87,6 +93,11 @@ def main():
         print("CV% by parameter:")
         for p, v in res["cv_percent"].items():
             print(f"  {p}: {v}")
+    elif args.command == "produce-videos":
+        outs = produce_marked_videos(args.session, args.model, args.out)
+        print(f"Wrote {len(outs)} marked videos:")
+        for o in outs:
+            print(f"  {o}")
 
 
 if __name__ == "__main__":
