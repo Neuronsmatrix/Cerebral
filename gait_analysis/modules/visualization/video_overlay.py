@@ -52,3 +52,60 @@ def draw_overlay(frame, marks, edges=SKELETON_EDGES):
         cv2.circle(frame, (x, y), 7, _JOINT_COLOR, -1)
         cv2.circle(frame, (x, y), 7, _BONE_COLOR, 1)
     return frame
+
+
+def produce_marked_video(video_path, xy_df, port, out_path, progress_cb=None):
+    """Draw the skeleton on every frame of one camera video; write an annotated mp4.
+
+    Reads the raw video frame-by-frame; frame N gets the marks for (port, frame_index=N).
+    Source fps + resolution are preserved. Returns the output Path.
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"cannot open video: {video_path}")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"),
+                             fps, (width, height))
+    if not writer.isOpened():
+        cap.release()
+        raise RuntimeError(f"cannot open video writer: {out_path}")
+    idx = 0
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            draw_overlay(frame, frame_marks(xy_df, port, idx))
+            writer.write(frame)
+            idx += 1
+            if progress_cb is not None and total:
+                progress_cb(idx / total, f"port {port}: frame {idx}/{total}")
+    finally:
+        cap.release()
+        writer.release()
+    return Path(out_path)
+
+
+def produce_marked_videos(session_dir, model, out_dir, progress_cb=None):
+    """Produce one marked mp4 per camera (each port_*.mp4 at the session root)."""
+    session = Path(session_dir)
+    videos = sorted(session.glob("port_*.mp4"))
+    if not videos:
+        raise FileNotFoundError(f"no raw camera videos (port_*.mp4) in {session}")
+    xy_df = load_xy(session_dir, model)
+    outputs = []
+    n = len(videos)
+    for i, video in enumerate(videos):
+        port = int(video.stem.split("_")[1])          # "port_2" -> 2
+        out_path = Path(out_dir) / f"{video.stem}_marked.mp4"
+
+        def port_cb(frac, stage, _i=i):
+            if progress_cb is not None:
+                progress_cb((_i + frac) / n, stage)
+
+        outputs.append(produce_marked_video(video, xy_df, port, out_path, port_cb))
+    return outputs
