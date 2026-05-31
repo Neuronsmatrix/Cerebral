@@ -14,3 +14,4 @@ PyQt6>=6.11
 vispy>=0.16.2
 PyOpenGL>=3.1
 pytest-qt>=4.5
+opencv-python-headless>=4.10
