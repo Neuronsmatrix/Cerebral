@@ -188,3 +188,11 @@ def test_overlay_worker_error_path_emits_error():
     worker.error.connect(errors.append)
     worker.run()
     assert errors          # missing videos/xy -> error signal, no crash
+
+
+def test_analyze_panel_has_produce_button_disabled_initially(qtbot):
+    from gui.panels.analyze_panel import AnalyzePanel
+    panel = AnalyzePanel()
+    qtbot.addWidget(panel)
+    assert hasattr(panel, "produce_btn")
+    assert not panel.produce_btn.isEnabled()       # disabled until a folder is chosen

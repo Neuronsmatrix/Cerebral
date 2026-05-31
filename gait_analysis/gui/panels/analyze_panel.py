@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from gui.overlay_worker import OverlayWorker
 from gui.worker import PipelineWorker
 from modules.data_loader.landmarks import GAIT_LANDMARKS, MODELS
 
@@ -63,6 +64,8 @@ class AnalyzePanel(QWidget):
         self.csv_btn.setEnabled(False)
         self.xlsx_btn = QPushButton("Export XLSX")
         self.xlsx_btn.setEnabled(False)
+        self.produce_btn = QPushButton("Produce marked videos")
+        self.produce_btn.setEnabled(False)
 
         form = QFormLayout()
         folder_row = QHBoxLayout()
@@ -82,11 +85,13 @@ class AnalyzePanel(QWidget):
         layout.addWidget(self.quality)
         layout.addWidget(self.table)
         layout.addLayout(export_row)
+        layout.addWidget(self.produce_btn)
 
         self.folder_btn.clicked.connect(self._choose_folder)
         self.run_btn.clicked.connect(self._run)
         self.csv_btn.clicked.connect(self._export_csv)
         self.xlsx_btn.clicked.connect(self._export_xlsx)
+        self.produce_btn.clicked.connect(self._produce_videos)
 
     def _choose_folder(self):
         path = QFileDialog.getExistingDirectory(self, "Choose caliscope session folder")
@@ -94,6 +99,7 @@ class AnalyzePanel(QWidget):
             self._folder = path
             self.folder_label.setText(Path(path).name)
             self.run_btn.setEnabled(True)
+            self.produce_btn.setEnabled(True)
 
     def _build_cfg(self):
         cfg = dict(self._cfg)
@@ -161,3 +167,26 @@ class AnalyzePanel(QWidget):
         if path:
             from modules.visualization.export import export_results_xlsx
             export_results_xlsx(self._results, path)
+
+    def _produce_videos(self):
+        self.produce_btn.setEnabled(False)
+        self.progress.setValue(0)
+        out_dir = (GAIT_DIR / self._cfg["paths"]["output_dir"]
+                   / f"{Path(self._folder).name}_marked")
+        self._overlay_thread = QThread()
+        self._overlay_worker = OverlayWorker(self._folder, self.model.currentText(),
+                                             str(out_dir))
+        self._overlay_worker.moveToThread(self._overlay_thread)
+        self._overlay_thread.started.connect(self._overlay_worker.run)
+        self._overlay_worker.progress.connect(self._on_progress)
+        self._overlay_worker.finished.connect(self._on_videos_done)
+        self._overlay_worker.error.connect(self._on_error)
+        self._overlay_worker.finished.connect(self._overlay_thread.quit)
+        self._overlay_worker.error.connect(self._overlay_thread.quit)
+        self._overlay_thread.finished.connect(lambda: self.produce_btn.setEnabled(True))
+        self._overlay_thread.start()
+
+    def _on_videos_done(self, paths):
+        where = paths[0].parent if paths else "(none)"
+        QMessageBox.information(self, "Marked videos",
+                               f"Saved {len(paths)} videos to:\n{where}")

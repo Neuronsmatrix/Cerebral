@@ -22,8 +22,9 @@ class MainWindow(QMainWindow):
             lambda *_: self.statusBar().showMessage("Analysis complete"))
 
     def closeEvent(self, event):
-        thread = getattr(self.analyze, "_thread", None)
-        if thread is not None and thread.isRunning():
-            thread.quit()
-            thread.wait()
+        for attr in ("_thread", "_overlay_thread"):
+            thread = getattr(self.analyze, attr, None)
+            if thread is not None and thread.isRunning():
+                thread.quit()
+                thread.wait()
         super().closeEvent(event)
