@@ -27,9 +27,15 @@ class MainWindow(QMainWindow):
             lambda *_: self.statusBar().showMessage("Comparison complete"))
 
     def closeEvent(self, event):
-        for panel in (self.analyze, self.compare):
-            thread = getattr(panel, "_thread", None)
-            if thread is not None and thread.isRunning():
-                thread.quit()
-                thread.wait()
+        # AnalyzePanel runs both a pipeline thread and a video-overlay thread;
+        # ComparePanel runs a comparison thread. Quit any that are still running
+        # so we never destroy a live QThread on close.
+        threads = {self.analyze: ("_thread", "_overlay_thread"),
+                   self.compare: ("_thread",)}
+        for panel, attrs in threads.items():
+            for attr in attrs:
+                thread = getattr(panel, attr, None)
+                if thread is not None and thread.isRunning():
+                    thread.quit()
+                    thread.wait()
         super().closeEvent(event)

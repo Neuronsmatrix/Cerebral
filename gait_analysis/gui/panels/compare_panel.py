@@ -39,12 +39,17 @@ class OverlayCanvas(FigureCanvasQTAgg):
     def render_overlay(self, overlay: dict):
         fig = self.figure
         fig.clear()
-        joints = list(overlay) or ["(none)"]
-        axes = fig.subplots(1, len(joints), squeeze=False)[0]
-        x = np.linspace(0, 100, 101)
+        if not overlay:
+            ax = fig.subplots(1, 1)
+            ax.set_title("no comparable joints")
+            ax.set_axis_off()
+            self.draw()
+            return
+        axes = fig.subplots(1, len(overlay), squeeze=False)[0]
         for ax, j in zip(axes, overlay):
             cal = overlay[j]["caliscope"]
             vic = overlay[j]["vicon"]
+            x = np.linspace(0, 100, len(cal))
             ax.plot(x, cal, color="tab:blue", label="caliscope")
             ax.plot(x, vic, color="tab:red", label="Vicon")
             ax.set_title(j)

@@ -237,3 +237,21 @@ def test_compare_panel_populates_table_and_plot_on_finished(qtbot):
     assert "left_knee" in [panel.table.item(0, 0).text()]
     assert any(ax.lines for ax in panel.overlay.current_figure.axes)  # overlay drawn
     assert "ICC" in panel.verdict.text() or "knee" in panel.verdict.text()
+
+
+def test_compare_panel_emits_comparison_done(qtbot):
+    from gui.panels.compare_panel import ComparePanel
+    panel = ComparePanel()
+    qtbot.addWidget(panel)
+    with qtbot.waitSignal(panel.comparison_done, timeout=1000):
+        panel._on_finished(_fake_comparison_report(), {})
+
+
+def test_compare_panel_overlay_handles_empty(qtbot):
+    from gui.panels.compare_panel import ComparePanel
+    panel = ComparePanel()
+    qtbot.addWidget(panel)
+    rep = _fake_comparison_report()
+    rep["angle"], rep["angle_overlay"] = {}, {}        # no comparable joints
+    panel._on_finished(rep, {})                        # must not raise
+    assert panel.table.rowCount() == 0
