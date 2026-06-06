@@ -206,3 +206,33 @@ def test_comparison_worker_error_path_emits_error():
     worker.error.connect(errors.append)
     worker.run()
     assert errors          # bad paths -> error signal, no crash
+
+
+def _fake_comparison_report():
+    import numpy as np
+    return {
+        "pair_id": "p1_1__1", "model": "SIMPLE_HOLISTIC",
+        "caliscope_fps": 19.0, "vicon_fps": 100.0,
+        "angle": {
+            "left_knee": {"rmse_deg": 4.2, "mae_deg": 3.1, "pearson": 0.97,
+                          "icc": 0.88, "verdict": "good"},
+        },
+        "angle_overlay": {
+            "left_knee": {"caliscope": list(np.linspace(0, 60, 101)),
+                          "vicon": list(np.linspace(0, 58, 101))},
+        },
+        "position": {"joints": {}, "time_shift_s": 0.1, "scale": 1.0,
+                     "low_confidence": False},
+        "verdict_summary": "1 joints compared; knee ICC=0.880; worst verdict: good",
+    }
+
+
+def test_compare_panel_populates_table_and_plot_on_finished(qtbot):
+    from gui.panels.compare_panel import ComparePanel
+    panel = ComparePanel()
+    qtbot.addWidget(panel)
+    panel._on_finished(_fake_comparison_report(), {})
+    assert panel.table.rowCount() == 1                  # one angle joint row
+    assert "left_knee" in [panel.table.item(0, 0).text()]
+    assert any(ax.lines for ax in panel.overlay.current_figure.axes)  # overlay drawn
+    assert "ICC" in panel.verdict.text() or "knee" in panel.verdict.text()
