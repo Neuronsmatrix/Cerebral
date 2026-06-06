@@ -43,3 +43,15 @@ def test_run_comparison_identical_streams_perfect_angle_agreement():
                for j in report["angle"])
     knee = report["angle"].get("left_knee") or report["angle"].get("right_knee")
     assert knee["rmse_deg"] < 1.0                     # same motion -> near-zero angle error
+
+
+def test_run_comparison_flags_low_confidence_when_alignment_fails():
+    cfg = yaml.safe_load(open("settings.yaml"))
+    cal = _walking_df()
+    vic = _walking_df()
+    vic["timestamp"] = vic["timestamp"] + 100.0       # no temporal overlap -> xcorr fails
+    report, _ = run_comparison(cal, vic, cfg, model="SIMPLE_HOLISTIC", pair_id="noalign")
+    # registration could not be fit -> no (garbage) position metrics, flagged low-confidence
+    assert report["position"]["joints"] == {}
+    assert report["position"]["low_confidence"] is True
+    assert report["angle"]                            # angle layer is unaffected

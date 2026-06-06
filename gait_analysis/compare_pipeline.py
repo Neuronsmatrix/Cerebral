@@ -1,4 +1,6 @@
 """Shared Vicon-comparison pipeline: one implementation for cli.py and the GUI worker."""
+import logging
+
 import numpy as np
 
 from modules.comparison.metrics import angle_comparison_report, position_comparison_report
@@ -8,6 +10,8 @@ from modules.kinematics.gait_events import detect_gait_events
 from modules.kinematics.joint_angles import calc_joint_angles_timeseries
 from modules.kinematics.normalizer import get_mean_std_cycle, normalize_gait_cycle
 from pipeline import _filter_coords  # reuse the Phase-1 coord filter
+
+logger = logging.getLogger(__name__)
 
 _JOINTS = ("hip", "knee", "ankle")
 
@@ -94,8 +98,15 @@ def run_comparison(cal_df, vic_df, cfg, *, model, pair_id, progress_cb=None):
             cal_df, vic_df, pos_joints,
             fs_grid=ccmp.get("vicon_fps", 100.0), max_shift=0.5)
         position_df = position_comparison_report(cal_pts, vic_pts)
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as exc:
+        logger.warning("position layer skipped (%s): %s", type(exc).__name__, exc)
         position_df, align_info = pd.DataFrame(), {"time_shift_s": None, "scale": None}
+    # scale is None when no rigid+scale transform could be fit (too few NaN-free
+    # samples, or the except path above). The Vicon points are then un-registered,
+    # so positional meters are meaningless -> drop them and flag low confidence.
+    low_confidence = align_info.get("scale") is None
+    if low_confidence:
+        position_df = pd.DataFrame()
 
     report(0.95, "Building report")
     rep = build_report(angle_df, position_df, overlay, meta={
@@ -104,7 +115,7 @@ def run_comparison(cal_df, vic_df, cfg, *, model, pair_id, progress_cb=None):
         "vicon_fps": round(float(vic_fps), 3),
         "time_shift_s": align_info.get("time_shift_s"),
         "scale": align_info.get("scale"),
-        "low_confidence": False,
+        "low_confidence": low_confidence,
     })
     report(1.0, "Done")
     artifacts = {"cal_cycles": cal_cycles, "vic_cycles": vic_cycles}
