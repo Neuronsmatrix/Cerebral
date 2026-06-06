@@ -38,3 +38,7 @@ comparison:
   icc_type: '3,1'
   good_rmse_threshold_deg: 5.0
   acceptable_rmse_threshold_deg: 10.0
+  vicon_fps: 100.0                  # Vicon device sample rate
+  sync_method: xcorr                # xcorr | jump | zmax (temporal alignment for position layer)
+  reference_landmarks: null         # markers used for rigid alignment (null = all common)
+  pairs: null                       # optional {caliscope_session: vicon_file} synchronous map
