@@ -1,0 +1,99 @@
+"""Shared Vicon-comparison pipeline: one implementation for cli.py and the GUI worker."""
+import numpy as np
+
+from modules.comparison.metrics import angle_comparison_report
+from modules.comparison.report import build_report
+from modules.kinematics.filters import fill_gaps
+from modules.kinematics.gait_events import detect_gait_events
+from modules.kinematics.joint_angles import calc_joint_angles_timeseries
+from modules.kinematics.normalizer import get_mean_std_cycle, normalize_gait_cycle
+from pipeline import _filter_coords  # reuse the Phase-1 coord filter
+
+_JOINTS = ("hip", "knee", "ankle")
+
+
+def _joint_curves(df, cfg, fps):
+    """Return {"<side>_<joint>": mean 101-pt curve} for joints with valid data.
+
+    All-NaN angle columns (e.g. Vicon hip, which needs a shoulder marker) are skipped.
+    """
+    proc, g = cfg["processing"], cfg["gait_events"]
+    df = fill_gaps(df, max_gap_frames=proc["max_gap_frames"])
+    df = _filter_coords(df, proc["filter_cutoff_hz"], proc["filter_order"], fps)
+    events = detect_gait_events(
+        df, fps=fps, method=g["method"], heel=g["heel_landmark"],
+        toe=g["toe_landmark"], vertical=g["vertical_axis"],
+        min_stride_sec=proc["min_stride_duration_sec"], cutoff_hz=proc["filter_cutoff_hz"],
+    )
+    df = calc_joint_angles_timeseries(df)
+    curves, cycles = {}, {}
+    for side in ("left", "right"):
+        if not events.get(f"{side}_HS"):
+            continue
+        for joint in _JOINTS:
+            col = f"{side}_{joint}_angle"
+            if col not in df.columns:
+                continue
+            arr = df[col].to_numpy()
+            if np.isnan(arr).all():
+                continue
+            mat = normalize_gait_cycle(arr, events, side=side)
+            if mat.shape[0] == 0:
+                continue
+            mean, _ = get_mean_std_cycle(mat)
+            if np.isnan(mean).all():
+                continue
+            curves[f"{side}_{joint}"] = mean
+            cycles[f"{side}_{joint}"] = mat
+    return curves, cycles
+
+
+def run_comparison(cal_df, vic_df, cfg, *, model, pair_id, progress_cb=None):
+    """Compare one caliscope stream vs one Vicon stream → (report, artifacts).
+
+    Angle layer (primary): same Module-2 kinematics on both → matched 101-pt curves.
+    Position layer is added in a later task; here it is reported empty when unavailable.
+    artifacts carries per-cycle matrices so callers (validate-vicon) can pool across clips.
+    """
+    import pandas as pd
+
+    ccmp = cfg["comparison"]
+
+    def report(frac, stage):
+        if progress_cb is not None:
+            progress_cb(frac, stage)
+
+    cal_fps = cal_df.attrs.get("fps")
+    vic_fps = vic_df.attrs.get("fps", ccmp.get("vicon_fps", 100.0))
+
+    report(0.15, "Caliscope kinematics")
+    cal_curves, cal_cycles = _joint_curves(cal_df, cfg, cal_fps)
+    report(0.45, "Vicon kinematics")
+    vic_curves, vic_cycles = _joint_curves(vic_df, cfg, vic_fps)
+
+    report(0.70, "Angle metrics")
+    angle_df = angle_comparison_report(
+        cal_curves, vic_curves,
+        good=ccmp["good_rmse_threshold_deg"],
+        acceptable=ccmp["acceptable_rmse_threshold_deg"],
+        icc_type=ccmp["icc_type"],
+    )
+    overlay = {
+        j: {"caliscope": list(map(float, cal_curves[j])),
+            "vicon": list(map(float, vic_curves[j]))}
+        for j in set(cal_curves) & set(vic_curves)
+    }
+
+    report(0.85, "Position metrics")
+    position_df = pd.DataFrame()        # position layer added in Task 9
+
+    report(0.95, "Building report")
+    rep = build_report(angle_df, position_df, overlay, meta={
+        "pair_id": pair_id, "model": model,
+        "caliscope_fps": None if cal_fps is None else round(float(cal_fps), 3),
+        "vicon_fps": round(float(vic_fps), 3),
+        "time_shift_s": None, "scale": None, "low_confidence": False,
+    })
+    report(1.0, "Done")
+    artifacts = {"cal_cycles": cal_cycles, "vic_cycles": vic_cycles}
+    return rep, artifacts
