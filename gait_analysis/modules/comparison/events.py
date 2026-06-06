@@ -39,10 +39,12 @@ def detect_heel_strikes(df, fps, side, heel="heel", min_stride_sec=0.8,
     Returns a sorted list of frame indices ([] if the heel marker is absent or flat).
     """
     cols = [f"{side}_{heel}_x", f"{side}_{heel}_y"]
-    if not all(c in df.columns for c in cols):
+    hip_cols = ["left_hip_x", "left_hip_y", "right_hip_x", "right_hip_y"]
+    if not all(c in df.columns for c in cols + hip_cols):
         return []
     rel = df[cols].to_numpy() - _pelvis_xy(df)
-    sd = np.nanstd(rel, axis=0)
+    with np.errstate(invalid="ignore"):
+        sd = np.nanstd(rel, axis=0)
     if not np.isfinite(sd).any() or np.nanmax(sd) == 0:
         return []
     ap = rel[:, int(np.nanargmax(sd))]
@@ -50,7 +52,10 @@ def detect_heel_strikes(df, fps, side, heel="heel", min_stride_sec=0.8,
     if finite.sum() < 4:
         return []
     ap = np.nan_to_num(ap, nan=float(np.nanmean(ap[finite])))
-    ap = butterworth_filter(ap, cutoff_hz=cutoff_hz, fs=fps)
+    try:
+        ap = butterworth_filter(ap, cutoff_hz=cutoff_hz, fs=fps)
+    except ValueError:
+        return []          # too few samples for zero-phase filtering
     # Orient so stance (the longer, decreasing phase) dominates; flip a sign-reversed axis.
     if np.mean(np.diff(ap) > 0) > 0.5:
         ap = -ap

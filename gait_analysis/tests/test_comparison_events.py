@@ -56,6 +56,22 @@ def test_detect_heel_strikes_missing_marker_returns_empty():
     assert detect_heel_strikes(df, fps=50.0, side="left") == []
 
 
+def test_detect_heel_strikes_missing_hip_returns_empty():
+    df = pd.DataFrame({"left_heel_x": np.arange(40.0), "left_heel_y": np.zeros(40)})
+    assert detect_heel_strikes(df, fps=50.0, side="left") == []
+
+
+def test_detect_heel_strikes_too_short_returns_empty():
+    # heel + hip present but too few frames for zero-phase filtering -> [] (not a raise)
+    n = 8
+    df = pd.DataFrame({
+        "left_hip_x": np.zeros(n), "left_hip_y": np.zeros(n),
+        "right_hip_x": np.zeros(n), "right_hip_y": np.zeros(n),
+        "left_heel_x": np.linspace(0, 1, n), "left_heel_y": np.zeros(n),
+    })
+    assert detect_heel_strikes(df, fps=50.0, side="left") == []
+
+
 def test_gait_cycle_events_returns_both_sides():
     df, stride, _ = _walker_df()
     ev = gait_cycle_events(df, fps=50.0, min_stride_sec=stride / 50.0 * 0.8)
