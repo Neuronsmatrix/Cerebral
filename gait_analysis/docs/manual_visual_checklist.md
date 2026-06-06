@@ -30,9 +30,11 @@ Run on a machine with a display + working OpenGL:
       data/Vicon_10_series --out results/vicon_validation` writes the Level-A/-C CSVs.
 - [ ] `test_vvsc_parity` passes (ported Umeyama reproduces VvsC's similarity transform exactly).
 
-**Known real-data caveat (see Phase 3 closing report):** current Level-A agreement is poor
-(knee ICC ≈ 0, RMSE ~15–19°). Cause is data-prep, not the apparatus: the 136 s Vicon trials
-pool ~92 mixed-motion cycles (sync jump + walking + idle) against ~3–4 clean caliscope walking
-cycles, and the caliscope↔Vicon pairing is an unverified order-assumption. Meaningful Level-A
-numbers require cropping Vicon to a steady-walking window, phase-aligning gait cycles, and a
-confirmed synchronous pairing.
+**Real-data Level-A result (after the Zeni heel-strike anchoring fix, `modules/comparison/events.py`):**
+knee ICC = 0.79 (left) / 0.74 (right), RMSE 16.1° / 9.1°; ankles ICC 0.26–0.39 (weak). So #5
+(knee ICC > 0.75) is essentially met for the knees; left-knee RMSE reflects a constant
+hip-marker-definition offset (Vicon ASIS proxy vs caliscope hip-joint-centre — high ICC/consistency,
+biased absolute angle). Ankles are weak (inherent markerless ankle/foot tracking limitation).
+**Caveat:** caliscope trials are *overground* walking, Vicon trials are *treadmill* walking, recorded
+in separate non-concurrent sessions of the same subject — real overground-vs-treadmill kinematic
+differences bound how high #4/#5 can go regardless of method.
