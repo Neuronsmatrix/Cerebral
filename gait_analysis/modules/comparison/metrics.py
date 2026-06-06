@@ -1,4 +1,6 @@
 """Accuracy metrics for Vicon comparison: RMSE/MAE/Pearson (NaN-aware) + ICC."""
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -46,8 +48,11 @@ def calc_icc(a, b, icc_type: str = "3,1") -> float:
         "rater": ["a"] * n + ["b"] * n,
         "rating": np.concatenate([a, b]),
     })
-    res = pg.intraclass_corr(data=long, targets="target", raters="rater",
-                             ratings="rating").set_index("Type")
+    with warnings.catch_warnings():
+        # pingouin divides by a zero F-stat denominator when raters agree perfectly
+        warnings.simplefilter("ignore", RuntimeWarning)
+        res = pg.intraclass_corr(data=long, targets="target", raters="rater",
+                                 ratings="rating").set_index("Type")
     return float(res.loc[_ICC_TYPE[icc_type], "ICC"])
 
 
@@ -70,9 +75,11 @@ def angle_comparison_report(cal_curves: dict, vic_curves: dict,
     BOTH (and non-degenerate) are reported — this naturally drops hip on the Vicon
     side (no shoulder marker -> all-NaN curve).
     """
-    joints = joint_list or sorted(set(cal_curves) & set(vic_curves))
+    joints = joint_list if joint_list is not None else sorted(set(cal_curves) & set(vic_curves))
     rows = []
     for j in joints:
+        if j not in cal_curves or j not in vic_curves:
+            continue
         a, b = np.asarray(cal_curves[j], float), np.asarray(vic_curves[j], float)
         if np.isnan(a).all() or np.isnan(b).all():
             continue
@@ -89,14 +96,20 @@ def angle_comparison_report(cal_curves: dict, vic_curves: dict,
                                        "pearson", "icc", "verdict"])
 
 
+_POS_COLS = ["joint", "n_samples", "rmse_m", "mae_m", "max_m", "median_m",
+             "rmse_x_m", "rmse_y_m", "rmse_z_m"]
+
+
 def position_comparison_report(cal_pts: dict, vic_pts: dict, joint_list=None) -> pd.DataFrame:
     """Per-joint positional error (meters) between matched (N,3) arrays.
 
     cal_pts / vic_pts: {"JOINT": (N,3)} already on a common, aligned grid.
     """
-    joints = joint_list or sorted(set(cal_pts) & set(vic_pts))
+    joints = joint_list if joint_list is not None else sorted(set(cal_pts) & set(vic_pts))
     rows = []
     for j in joints:
+        if j not in cal_pts or j not in vic_pts:
+            continue
         v, c = np.asarray(vic_pts[j], float), np.asarray(cal_pts[j], float)
         diff = v - c
         mask = ~np.isnan(diff).any(axis=1)
@@ -115,4 +128,4 @@ def position_comparison_report(cal_pts: dict, vic_pts: dict, joint_list=None) ->
             "rmse_y_m": float(np.sqrt(np.mean(d[:, 1] ** 2))),
             "rmse_z_m": float(np.sqrt(np.mean(d[:, 2] ** 2))),
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=_POS_COLS)

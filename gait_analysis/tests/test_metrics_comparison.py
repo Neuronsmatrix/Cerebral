@@ -67,3 +67,27 @@ def test_position_report_zero_error_for_identical_points():
     rep = position_comparison_report(pts, pts)
     row = rep.set_index("joint").loc["LKNE"]
     assert row["rmse_m"] == 0.0 and row["mae_m"] == 0.0
+
+
+def test_verdict_boundaries_and_nan():
+    # boundary == good -> not "good" (strict <), == acceptable -> "acceptable" (<=)
+    assert verdict_for_rmse(5.0, 5.0, 10.0) == "acceptable"
+    assert verdict_for_rmse(10.0, 5.0, 10.0) == "acceptable"
+    assert verdict_for_rmse(float("nan"), 5.0, 10.0) == "n/a"
+
+
+def test_empty_reports_keep_columns():
+    # no common joints -> empty frame but with the documented columns (no KeyError downstream)
+    angle = angle_comparison_report({}, {})
+    assert list(angle.columns) == ["joint", "rmse_deg", "mae_deg", "pearson", "icc", "verdict"]
+    assert len(angle) == 0
+    pos = position_comparison_report({}, {})
+    assert "joint" in pos.columns and "rmse_m" in pos.columns and len(pos) == 0
+
+
+def test_reports_skip_joint_list_entries_missing_from_either_dict():
+    cal = {"left_knee": np.linspace(0, 60, 101)}
+    vic = {"left_knee": np.linspace(0, 60, 101)}
+    # explicit joint_list naming an absent joint must not raise, just skip it
+    rep = angle_comparison_report(cal, vic, joint_list=["left_knee", "right_ankle"])
+    assert set(rep["joint"]) == {"left_knee"}
