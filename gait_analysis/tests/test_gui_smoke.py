@@ -196,3 +196,13 @@ def test_analyze_panel_has_produce_button_disabled_initially(qtbot):
     qtbot.addWidget(panel)
     assert hasattr(panel, "produce_btn")
     assert not panel.produce_btn.isEnabled()       # disabled until a folder is chosen
+
+
+def test_comparison_worker_error_path_emits_error():
+    from gui.worker import ComparisonWorker
+    worker = ComparisonWorker("/nonexistent/session", "/nonexistent/vicon.xlsx",
+                              "SIMPLE_HOLISTIC", {})
+    errors = []
+    worker.error.connect(errors.append)
+    worker.run()
+    assert errors          # bad paths -> error signal, no crash
