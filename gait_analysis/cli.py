@@ -6,7 +6,9 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from compare_pipeline import run_comparison
 from modules.data_loader.caliscope_reader import load_caliscope_session
+from modules.data_loader.vicon_reader import load_vicon_xlsx, map_vicon_to_caliscope
 from modules.visualization.video_overlay import produce_marked_videos
 from pipeline import run_pipeline
 
@@ -61,6 +63,22 @@ def reproducibility(recordings_dir: str, sessions: list[str], model: str,
     return out
 
 
+def _load_vicon_mapped(vicon_path: str, cfg: dict):
+    df = load_vicon_xlsx(vicon_path, vicon_fps=cfg["comparison"].get("vicon_fps", 100.0))
+    return map_vicon_to_caliscope(df, cfg["landmark_mapping"])
+
+
+def compare(session_dir: str, vicon_path: str, model: str, out_path: str) -> dict:
+    cfg = _load_settings()
+    cal = load_caliscope_session(session_dir, model=model)
+    vic = _load_vicon_mapped(vicon_path, cfg)
+    pair_id = f"{Path(session_dir).name}__{Path(vicon_path).stem}"
+    report, _ = run_comparison(cal, vic, cfg, model=model, pair_id=pair_id)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(out_path).write_text(json.dumps(report, indent=2))
+    return report
+
+
 def main():
     default_model = _load_settings()["processing"]["default_model"]
     p = argparse.ArgumentParser(description="Gait analysis CLI")
@@ -76,6 +94,12 @@ def main():
     r.add_argument("--sessions", required=True, help="comma-separated session names")
     r.add_argument("--model", default=default_model)
     r.add_argument("--out", required=True)
+
+    c = sub.add_parser("compare", help="Compare one caliscope session vs one Vicon trial")
+    c.add_argument("--session", required=True)
+    c.add_argument("--vicon", required=True)
+    c.add_argument("--model", default=default_model)
+    c.add_argument("--out", required=True)
 
     v = sub.add_parser("produce-videos", help="Draw the skeleton on each camera video")
     v.add_argument("--session", required=True)
@@ -93,6 +117,12 @@ def main():
         print("CV% by parameter:")
         for p, v in res["cv_percent"].items():
             print(f"  {p}: {v}")
+    elif args.command == "compare":
+        rep = compare(args.session, args.vicon, args.model, args.out)
+        knee = rep["angle"].get("left_knee") or rep["angle"].get("right_knee") or {}
+        print(f"Wrote {args.out}: {rep['verdict_summary']}")
+        if knee:
+            print(f"  knee RMSE={knee['rmse_deg']:.2f}° ICC={knee['icc']:.3f}")
     elif args.command == "produce-videos":
         outs = produce_marked_videos(args.session, args.model, args.out)
         print(f"Wrote {len(outs)} marked videos:")
