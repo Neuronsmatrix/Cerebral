@@ -89,17 +89,18 @@ def test_viz_panel_set_data_wires_slider_and_plots(qtbot):
     assert panel.plots.current_figure.axes        # plots rendered
 
 
-def test_main_window_has_two_tabs_and_routes_results(qtbot):
+def test_main_window_has_three_tabs_and_routes_results(qtbot):
     try:
         from gui.main_window import MainWindow
         win = MainWindow()
     except Exception as exc:                 # vispy/GL unavailable (VizPanel)
         pytest.skip(f"vispy widget unavailable: {exc}")
     qtbot.addWidget(win)
-    assert win.centralWidget().count() == 2
+    assert win.centralWidget().count() == 3
     results, df = fixture_results_df()
     win.analyze._on_finished(results, df)            # emits analysis_done
     assert win.viz.slider.maximum() == len(df) - 1   # routed into the Viz tab
+    assert hasattr(win, "compare")                   # compare tab present
 
 
 def test_analyze_panel_quality_line_only_flags_gait_landmarks(qtbot):
