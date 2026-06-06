@@ -79,6 +79,61 @@ def compare(session_dir: str, vicon_path: str, model: str, out_path: str) -> dic
     return report
 
 
+def _pool_curves(artifacts_list):
+    """Concatenate per-cycle matrices across pairs -> subject-level ensemble mean curve."""
+    cal_stack, vic_stack = {}, {}
+    for art in artifacts_list:
+        for j, mat in art.get("cal_cycles", {}).items():
+            cal_stack.setdefault(j, []).append(np.asarray(mat, float))
+        for j, mat in art.get("vic_cycles", {}).items():
+            vic_stack.setdefault(j, []).append(np.asarray(mat, float))
+    cal_curves = {j: np.nanmean(np.vstack(v), axis=0) for j, v in cal_stack.items()}
+    vic_curves = {j: np.nanmean(np.vstack(v), axis=0) for j, v in vic_stack.items()}
+    return cal_curves, vic_curves
+
+
+def validate_vicon(recordings_dir: str, vicon_dir: str, model: str, out_dir: str) -> dict:
+    """Run all configured/auto pairs; emit pooled Level-A angle table + per-pair position rows."""
+    import pandas as pd
+
+    from modules.comparison.metrics import angle_comparison_report
+
+    cfg = _load_settings()
+    ccmp = cfg["comparison"]
+    pairs = ccmp.get("pairs")
+    if not pairs:                      # default: p1_1..p1_5 <-> Vicon 1..5 by order
+        pairs = {f"p1_{i}": f"{i}.xlsx" for i in range(1, 6)}
+
+    artifacts, position_rows = [], []
+    for sess, vfile in pairs.items():
+        sess_dir = str(Path(recordings_dir) / sess)
+        vpath = str(Path(vicon_dir) / vfile)
+        if not (Path(sess_dir).exists() and Path(vpath).exists()):
+            continue
+        cal = load_caliscope_session(sess_dir, model=model)
+        vic = _load_vicon_mapped(vpath, cfg)
+        rep, art = run_comparison(cal, vic, cfg, model=model, pair_id=f"{sess}__{vfile}")
+        artifacts.append(art)
+        for j, m in rep["position"]["joints"].items():
+            position_rows.append({"pair": f"{sess}__{vfile}", "joint": j, **m})
+
+    cal_curves, vic_curves = _pool_curves(artifacts)
+    level_a = angle_comparison_report(
+        cal_curves, vic_curves,
+        good=ccmp["good_rmse_threshold_deg"],
+        acceptable=ccmp["acceptable_rmse_threshold_deg"],
+        icc_type=ccmp["icc_type"])
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    level_a.to_csv(out / "level_a_angles.csv", index=False)
+    pd.DataFrame(position_rows).to_csv(out / "level_c_positions.csv", index=False)
+    summary = {"n_pairs": len(artifacts),
+               "level_a": level_a.to_dict(orient="records")}
+    (out / "validation_summary.json").write_text(json.dumps(summary, indent=2))
+    return summary
+
+
 def main():
     default_model = _load_settings()["processing"]["default_model"]
     p = argparse.ArgumentParser(description="Gait analysis CLI")
@@ -106,6 +161,12 @@ def main():
     v.add_argument("--model", default=default_model)
     v.add_argument("--out", required=True)
 
+    vv = sub.add_parser("validate-vicon", help="Level A/C validation tables across the dataset")
+    vv.add_argument("--recordings", required=True)
+    vv.add_argument("--vicon-dir", required=True)
+    vv.add_argument("--model", default=default_model)
+    vv.add_argument("--out", required=True)
+
     args = p.parse_args()
     if args.command == "analyze":
         res = analyze(args.session, args.model, args.out)
@@ -128,6 +189,12 @@ def main():
         print(f"Wrote {len(outs)} marked videos:")
         for o in outs:
             print(f"  {o}")
+    elif args.command == "validate-vicon":
+        res = validate_vicon(args.recordings, args.vicon_dir, args.model, args.out)
+        print(f"Validated {res['n_pairs']} pairs. Level-A angle table:")
+        for row in res["level_a"]:
+            print(f"  {row['joint']}: RMSE={row['rmse_deg']:.2f}° "
+                  f"ICC={row['icc']:.3f} ({row['verdict']})")
 
 
 if __name__ == "__main__":
