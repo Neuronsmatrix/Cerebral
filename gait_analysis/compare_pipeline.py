@@ -1,7 +1,7 @@
 """Shared Vicon-comparison pipeline: one implementation for cli.py and the GUI worker."""
 import numpy as np
 
-from modules.comparison.metrics import angle_comparison_report
+from modules.comparison.metrics import angle_comparison_report, position_comparison_report
 from modules.comparison.report import build_report
 from modules.kinematics.filters import fill_gaps
 from modules.kinematics.gait_events import detect_gait_events
@@ -85,14 +85,26 @@ def run_comparison(cal_df, vic_df, cfg, *, model, pair_id, progress_cb=None):
     }
 
     report(0.85, "Position metrics")
-    position_df = pd.DataFrame()        # position layer added in Task 9
+    from modules.comparison.alignment import align_streams
+
+    pos_joints = {"LHIP": "left_hip", "RHIP": "right_hip", "LKNE": "left_knee",
+                  "RKNE": "right_knee", "LANK": "left_ankle", "RANK": "right_ankle"}
+    try:
+        cal_pts, vic_pts, align_info = align_streams(
+            cal_df, vic_df, pos_joints,
+            fs_grid=ccmp.get("vicon_fps", 100.0), max_shift=0.5)
+        position_df = position_comparison_report(cal_pts, vic_pts)
+    except (ValueError, KeyError):
+        position_df, align_info = pd.DataFrame(), {"time_shift_s": None, "scale": None}
 
     report(0.95, "Building report")
     rep = build_report(angle_df, position_df, overlay, meta={
         "pair_id": pair_id, "model": model,
         "caliscope_fps": None if cal_fps is None else round(float(cal_fps), 3),
         "vicon_fps": round(float(vic_fps), 3),
-        "time_shift_s": None, "scale": None, "low_confidence": False,
+        "time_shift_s": align_info.get("time_shift_s"),
+        "scale": align_info.get("scale"),
+        "low_confidence": False,
     })
     report(1.0, "Done")
     artifacts = {"cal_cycles": cal_cycles, "vic_cycles": vic_cycles}

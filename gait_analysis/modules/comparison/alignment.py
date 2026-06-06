@@ -56,6 +56,66 @@ def _speed(time: np.ndarray, point: np.ndarray):
     return t_mid, speed
 
 
+def _pelvis(df):
+    cols = [("left_hip", "right_hip")]
+    for lh, rh in cols:
+        if all(f"{lh}_{a}" in df.columns for a in "xyz") and \
+           all(f"{rh}_{a}" in df.columns for a in "xyz"):
+            lpts = df[[f"{lh}_x", f"{lh}_y", f"{lh}_z"]].to_numpy(float)
+            rpts = df[[f"{rh}_x", f"{rh}_y", f"{rh}_z"]].to_numpy(float)
+            return 0.5 * (lpts + rpts)
+    return None
+
+
+def align_streams(cal_df, vic_df, joints, fs_grid=100.0, max_shift=0.5):
+    """Time-align (xcorr on pelvis speed) + rigid+scale register Vicon onto caliscope.
+
+    joints: {"JOINT": "canonical_landmark"} to compare, e.g. {"LKNE": "left_knee"}.
+    Returns (cal_pts, vic_pts_aligned, info) where each *_pts is {"JOINT": (N,3)} on a
+    shared grid, and info has time_shift_s + scale.
+    """
+    import numpy as np
+
+    from modules.data_loader.synchronizer import synchronize
+
+    cp, vp = _pelvis(cal_df), _pelvis(vic_df)
+    shift = 0.0
+    if cp is not None and vp is not None:
+        shift = estimate_time_shift_xcorr(
+            cal_df["timestamp"].to_numpy(), cp,
+            vic_df["timestamp"].to_numpy(), vp, fs_grid=fs_grid, max_shift=max_shift)
+    vic_shifted = vic_df.copy()
+    vic_shifted["timestamp"] = vic_shifted["timestamp"] - shift
+    cal_g, vic_g = synchronize(cal_df, vic_shifted, target_fps=fs_grid)
+
+    def pts(df, landmark):
+        cols = [f"{landmark}_{a}" for a in "xyz"]
+        if not all(c in df.columns for c in cols):
+            return None
+        return df[cols].to_numpy(float)
+
+    cal_pts, vic_pts = {}, {}
+    for jname, landmark in joints.items():
+        c, v = pts(cal_g, landmark), pts(vic_g, landmark)
+        if c is None or v is None:
+            continue
+        cal_pts[jname], vic_pts[jname] = c, v
+
+    # estimate one transform on all common, NaN-free samples (concatenated)
+    A, B = [], []
+    common = sorted(set(cal_pts) & set(vic_pts))
+    for j in common:
+        m = ~(np.isnan(cal_pts[j]).any(1) | np.isnan(vic_pts[j]).any(1))
+        A.append(vic_pts[j][m])
+        B.append(cal_pts[j][m])
+    scale = None
+    if A and sum(len(a) for a in A) >= 3:
+        R, T, scale = estimate_rigid_transform(np.concatenate(A), np.concatenate(B))
+        vic_pts = {j: apply_transform(vic_pts[j], R, T, scale) for j in vic_pts}
+    return cal_pts, vic_pts, {"time_shift_s": float(shift),
+                              "scale": None if scale is None else float(scale)}
+
+
 def estimate_time_shift_xcorr(
     t_a,
     pts_a,
