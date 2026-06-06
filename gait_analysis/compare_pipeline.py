@@ -3,10 +3,10 @@ import logging
 
 import numpy as np
 
+from modules.comparison.events import gait_cycle_events
 from modules.comparison.metrics import angle_comparison_report, position_comparison_report
 from modules.comparison.report import build_report
 from modules.kinematics.filters import fill_gaps
-from modules.kinematics.gait_events import detect_gait_events
 from modules.kinematics.joint_angles import calc_joint_angles_timeseries
 from modules.kinematics.normalizer import get_mean_std_cycle, normalize_gait_cycle
 from pipeline import _filter_coords  # reuse the Phase-1 coord filter
@@ -24,9 +24,10 @@ def _joint_curves(df, cfg, fps):
     proc, g = cfg["processing"], cfg["gait_events"]
     df = fill_gaps(df, max_gap_frames=proc["max_gap_frames"])
     df = _filter_coords(df, proc["filter_cutoff_hz"], proc["filter_order"], fps)
-    events = detect_gait_events(
-        df, fps=fps, method=g["method"], heel=g["heel_landmark"],
-        toe=g["toe_landmark"], vertical=g["vertical_axis"],
+    # Coordinate-based (Zeni) heel-strike anchoring -- robust on low-fps markerless data
+    # where vertical-minima detection mis-anchors the cycle (see modules.comparison.events).
+    events = gait_cycle_events(
+        df, fps, heel=g["heel_landmark"],
         min_stride_sec=proc["min_stride_duration_sec"], cutoff_hz=proc["filter_cutoff_hz"],
     )
     df = calc_joint_angles_timeseries(df)

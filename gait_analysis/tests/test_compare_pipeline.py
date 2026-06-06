@@ -23,9 +23,11 @@ def _walking_df(n=240, fps=60.0):
         df[f"{side}_ankle_z"] = 0.1 + 0.04 * np.sin(phase + ph)
         df[f"{side}_heel_z"] = 0.08 + 0.05 * (np.sin(phase + ph) ** 2)
         df[f"{side}_foot_index_z"] = 0.05 + 0.05 * (np.cos(phase + ph) ** 2)
-        df[f"{side}_heel_x"] = 0.4 * t
+        # heel swings anterior-posterior relative to the pelvis each stride (drives the
+        # Zeni coordinate-based heel-strike detector used by the comparison pipeline)
+        df[f"{side}_heel_x"] = 0.4 * t + 0.25 * np.sin(phase + ph)
         df[f"{side}_heel_y"] = 0.0
-        df[f"{side}_foot_index_x"] = 0.4 * t
+        df[f"{side}_foot_index_x"] = 0.4 * t + 0.25 * np.sin(phase + ph)
         df[f"{side}_foot_index_y"] = 0.0
     df.attrs["fps"] = fps
     return df
