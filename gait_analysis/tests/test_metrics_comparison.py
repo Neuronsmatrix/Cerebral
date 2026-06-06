@@ -1,7 +1,15 @@
 import numpy as np
 import pytest
 
-from modules.comparison.metrics import calc_icc, calc_mae, calc_pearson, calc_rmse
+from modules.comparison.metrics import (
+    angle_comparison_report,
+    calc_icc,
+    calc_mae,
+    calc_pearson,
+    calc_rmse,
+    position_comparison_report,
+    verdict_for_rmse,
+)
 
 
 def test_identity_arrays_give_perfect_scores():
@@ -36,3 +44,26 @@ def test_icc_high_for_strongly_agreeing_raters():
     a = rng.normal(size=80)
     b = a + rng.normal(scale=0.05, size=80)     # near-identical raters
     assert calc_icc(a, b) > 0.9
+
+
+def test_verdict_thresholds():
+    assert verdict_for_rmse(3.0, 5.0, 10.0) == "good"
+    assert verdict_for_rmse(7.0, 5.0, 10.0) == "acceptable"
+    assert verdict_for_rmse(12.0, 5.0, 10.0) == "poor"
+
+
+def test_angle_report_uses_joint_intersection_and_verdicts():
+    cal = {"left_knee": np.linspace(0, 60, 101), "left_ankle": np.linspace(0, 20, 101)}
+    vic = {"left_knee": np.linspace(0, 60, 101)}          # ankle missing on one side
+    rep = angle_comparison_report(cal, vic, good=5.0, acceptable=10.0)
+    assert set(rep["joint"]) == {"left_knee"}              # intersection only
+    row = rep.set_index("joint").loc["left_knee"]
+    assert row["rmse_deg"] == 0.0 and row["verdict"] == "good"
+    assert row["icc"] > 0.99
+
+
+def test_position_report_zero_error_for_identical_points():
+    pts = {"LKNE": np.tile([0.1, 0.2, 0.9], (10, 1))}
+    rep = position_comparison_report(pts, pts)
+    row = rep.set_index("joint").loc["LKNE"]
+    assert row["rmse_m"] == 0.0 and row["mae_m"] == 0.0
