@@ -4,14 +4,10 @@ import pandas as pd
 from openpyxl import load_workbook
 
 
-def _read_rows(path: str, max_rows: int | None = None) -> list[list]:
+def _read_rows(path: str) -> list[list]:
     wb = load_workbook(path, read_only=True, data_only=True)
     ws = wb.active
-    rows = []
-    for i, r in enumerate(ws.iter_rows(values_only=True)):
-        rows.append(list(r))
-        if max_rows is not None and i + 1 >= max_rows:
-            break
+    rows = [list(r) for r in ws.iter_rows(values_only=True)]
     wb.close()
     return rows
 
@@ -45,13 +41,15 @@ def load_vicon_xlsx(filepath: str, vicon_fps: float = 100.0) -> pd.DataFrame:
 
     - axis row auto-detected (tolerant of Frame/Sub Frame columns);
     - marker names are colon-split to drop the subject prefix;
-    - the duplicate '| ... |' block yields names like 'LKNE |' that simply
-      become extra columns and are dropped at mapping time;
+    - the duplicate '| ... |' block (and the Trajectory-Count column) are skipped,
+      so no phantom coordinate columns leak downstream;
     - mm->m when median(|coord|) > 10;
     - adds zero-based ``timestamp`` = (frame - frame[0]) / vicon_fps and ``frame``.
     """
     rows = _read_rows(filepath)
     axis_i = _find_axis_row(rows)
+    if axis_i == 0:
+        raise ValueError("axis row has no marker-name row above it")
     name_row = rows[axis_i - 1]
     axis_row = rows[axis_i]
 
@@ -74,7 +72,9 @@ def load_vicon_xlsx(filepath: str, vicon_fps: float = 100.0) -> pd.DataFrame:
     columns: list[str | None] = []
     for name, axis in zip(names, axis_row):
         ax = str(axis).strip().upper() if axis is not None else ""
-        if name is None or ax not in ("X", "Y", "Z"):
+        # skip the '| ... |' duplicate block (forward-fill still advances `last`
+        # above, so the clean block keeps its own columns) and non-axis columns
+        if name is None or "|" in name or ax not in ("X", "Y", "Z"):
             columns.append(None)
             continue
         columns.append(f"{name}_{ax.lower()}")
@@ -102,14 +102,14 @@ def load_vicon_xlsx(filepath: str, vicon_fps: float = 100.0) -> pd.DataFrame:
             frames.append(float(len(frames)))
 
     df = pd.DataFrame(records)
-    # drop the units row (e.g. all 'mm') which produced an empty/NaN record set:
-    df = df.dropna(how="all").reset_index(drop=True)
+    if len(df) == 0:
+        raise ValueError(f"No data rows found in {filepath}")
 
     coord = df.to_numpy(dtype=float)
     if np.nanmedian(np.abs(coord)) > 10.0:
         df = df / 1000.0
 
-    frames = np.asarray(frames[: len(df)], dtype=float)
+    frames = np.asarray(frames, dtype=float)
     df.insert(0, "timestamp", (frames - frames[0]) / vicon_fps)
     df.insert(0, "frame", range(len(df)))
     return df

@@ -56,3 +56,24 @@ def test_map_vicon_to_caliscope_renames(tmp_path):
     out = map_vicon_to_caliscope(df, {"LKNE": "left_knee", "RKNE": "right_knee"})
     assert "left_knee_x" in out.columns and "right_knee_z" in out.columns
     assert "LKNE_x" not in out.columns
+
+
+def test_load_vicon_frame_fallback_when_no_frame_column(tmp_path):
+    """No 'Frame' label in the axis row -> timestamps fall back to row index / fps."""
+    p = tmp_path / "noframe.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Trajectories"])
+    ws.append(["100"])
+    ws.append([None, None, "Subj:LKNE", "", ""])      # marker-name row
+    ws.append([None, None, "X", "Y", "Z"])            # axis row, no Frame/Sub Frame
+    ws.append([None, None, "mm", "mm", "mm"])         # units row
+    ws.append([None, None, 100.0, 200.0, 300.0])
+    ws.append([None, None, 110.0, 210.0, 310.0])
+    ws.append([None, None, 120.0, 220.0, 320.0])
+    wb.save(p)
+    df = load_vicon_xlsx(str(p), vicon_fps=100.0)
+    assert "LKNE_x" in df.columns and len(df) == 3
+    # frame numbers absent -> 0,1,2 -> timestamps 0, 0.01, 0.02
+    assert df["timestamp"].iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert df["timestamp"].iloc[2] == pytest.approx(0.02, abs=1e-9)
