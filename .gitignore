@@ -1,5 +1,8 @@
 # Large raw data (caliscope project: ~hundreds of MB of MP4 + CSV) — not version-controlled
 caliscope_project_271025/
+caliscope_project/
+Vicon_10_series/
+*.py[cod]
 
 # Python
 __pycache__/

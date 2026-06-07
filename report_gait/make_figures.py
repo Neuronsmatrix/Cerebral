@@ -200,12 +200,14 @@ def fig_pipeline() -> None:
 def fig_architecture() -> None:
     fig, ax = plt.subplots(figsize=(9.4, 6.2), dpi=120)
     ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis("off")
-    done = "#e8efdd"; core = "#dce7ee"; gated = "#f4dad3"; io = "#e6e1d4"
+    done = "#e8efdd"; core = "#dce7ee"; io = "#e6e1d4"
     _box(ax, 4, 86, 92, 10,
-         "Точки входа:  cli.py (analyze · reproducibility · produce-videos)   |   app.py → PyQt6 GUI",
-         io, fs=8.6)
+         "Точки входа:  cli.py (analyze · reproducibility · produce-videos · compare · validate-vicon)"
+         "   |   app.py → PyQt6 GUI",
+         io, fs=8.0)
     _box(ax, 4, 70, 44, 12,
-         "gui/ (PyQt6)\nMainWindow · QThread-воркеры\nвкладки «Анализ» / «Визуализация»", done, fs=8.2)
+         "gui/ (PyQt6)\nMainWindow · QThread-воркеры\nвкладки «Анализ» / «Сравнение» / «Визуализация»",
+         done, fs=8.2)
     _box(ax, 52, 70, 44, 12,
          "Видео-оверлей\nvideo_overlay + overlay_worker\nport_N_marked.mp4 (×N камер)", done, fs=8.2)
     _box(ax, 4, 50, 28, 14,
@@ -217,24 +219,139 @@ def fig_architecture() -> None:
     _box(ax, 20, 34, 60, 8,
          "pipeline.run_pipeline()  — общий конвейер для CLI и GUI", core, fs=9)
     _box(ax, 4, 16, 44, 12,
-         "modules/comparison/  — НЕ РЕАЛИЗОВАНО (Этап 3)\nalignment (Umeyama) · metrics (RMSE/MAE/ICC)\nreport · CLI compare",
-         gated, ec="#8a3a2e", fs=7.6)
+         "modules/comparison/  — РЕАЛИЗОВАН (Этап 3)\nalignment (Umeyama) · metrics (RMSE/MAE/ICC)\nevents (Zeni) · report · compare_pipeline",
+         done, fs=7.6)
     _box(ax, 52, 16, 44, 12,
-         "Сравнение с Vicon — ЗАБЛОКИРОВАНО\nтребуются: Vicon XLSX + VvsC.py\nуровни валидации A и C",
-         gated, ec="#8a3a2e", fs=7.6)
+         "Сравнение с Vicon — РЕАЛИЗОВАНО\nданные: Vicon_10_series/ + VvsC.py\nуровни A, C выполнены; ICC колена 0,74–0,79",
+         done, fs=7.6)
     _box(ax, 4, 2, 92, 9,
-         "Данные / артефакты:  caliscope_project (xyz/xy CSV, port_*.mp4) · results/*.json · PNG · CSV/XLSX · marked.mp4",
+         "Данные / артефакты:  caliscope_project · Vicon_10_series/ · results/*.json · comparison_report.json · CSV/XLSX · PNG",
          io, fs=8.2)
     for (x0, y0, x1, y1) in [
         (50, 86, 50, 82), (26, 70, 18, 64), (74, 70, 82, 64),
         (50, 50, 50, 42), (50, 34, 26, 28), (50, 34, 74, 28), (50, 16, 50, 11),
     ]:
         _arrow(ax, x0, y0, x1, y1)
-    ax.set_title("Архитектура: реализованные модули и заблокированный контур Vicon (красным)",
+    ax.set_title("Архитектура: все модули (1–4) реализованы; уровни A, B, C выполнены",
                  fontsize=10)
     fig.tight_layout()
     fig.savefig(FIG / "fig_architecture.png", dpi=120)
     print("fig_architecture.png")
+
+
+def fig_vicon_compare() -> None:
+    """Level-A: caliscope (blue) vs Vicon (red) mean±SD angle curves, pooled over 5 pairs.
+
+    Mirrors the validate_vicon pooling logic in cli.py:
+      - pairs: p1_1..p1_5  <->  Vicon_10_series/1.xlsx..5.xlsx
+      - for each pair: run_comparison → artifacts (cal_cycles, vic_cycles)
+      - pool: vstack per-cycle matrices across all pairs, then mean±SD
+      - metrics: RMSE/Pearson/ICC on the pooled mean curves (same as level_a table)
+    """
+    import yaml
+
+    sys.path.insert(0, str(GAIT))
+    from compare_pipeline import run_comparison
+    from modules.comparison.metrics import calc_icc, calc_pearson, calc_rmse
+    from modules.data_loader.caliscope_reader import load_caliscope_session
+    from modules.data_loader.vicon_reader import load_vicon_xlsx, map_vicon_to_caliscope
+
+    with open(GAIT / "settings.yaml") as fh:
+        cfg = yaml.safe_load(fh)
+
+    vicon_dir = GAIT / "data" / "Vicon_10_series"
+    pairs = {f"p1_{i}": f"{i}.xlsx" for i in range(1, 6)}
+
+    cal_stack: dict[str, list] = {}
+    vic_stack: dict[str, list] = {}
+
+    for sess, vfile in pairs.items():
+        sess_dir = REC / sess
+        vpath = vicon_dir / vfile
+        if not sess_dir.exists() or not vpath.exists():
+            print(f"  SKIP {sess} / {vfile} (not found)")
+            continue
+        cal_df = load_caliscope_session(str(sess_dir), model=MODEL)
+        vic_df = map_vicon_to_caliscope(
+            load_vicon_xlsx(str(vpath), vicon_fps=cfg["comparison"].get("vicon_fps", 100.0)),
+            cfg["landmark_mapping"],
+        )
+        _, art = run_comparison(
+            cal_df, vic_df, cfg, model=MODEL, pair_id=f"{sess}__{vfile}"
+        )
+        for j, mat in art.get("cal_cycles", {}).items():
+            cal_stack.setdefault(j, []).append(np.asarray(mat, float))
+        for j, mat in art.get("vic_cycles", {}).items():
+            vic_stack.setdefault(j, []).append(np.asarray(mat, float))
+        print(f"  pair {sess}/{vfile}: cal joints={list(art.get('cal_cycles', {}).keys())}")
+
+    joints = sorted(set(cal_stack) & set(vic_stack))
+    print(f"fig_vicon_compare: common joints = {joints}")
+
+    # Display order: knees first, then ankles
+    order = [j for j in ["left_knee", "right_knee", "left_ankle", "right_ankle"] if j in joints]
+    remaining = [j for j in joints if j not in order]
+    plot_joints = order + remaining
+    if not plot_joints:
+        print("fig_vicon_compare: no common joints — skipping")
+        return
+
+    n_cols = min(len(plot_joints), 4)
+    n_rows = (len(plot_joints) + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4.5 * n_cols, 4.0 * n_rows), dpi=120)
+    axes = np.array(axes).ravel() if n_rows * n_cols > 1 else [axes]
+    x = np.linspace(0, 100, 101)
+
+    joint_labels_ru = {
+        "left_knee": "Левое колено",
+        "right_knee": "Правое колено",
+        "left_ankle": "Левый голеностоп",
+        "right_ankle": "Правый голеностоп",
+        "left_hip": "Левое бедро",
+        "right_hip": "Правое бедро",
+    }
+
+    for idx, joint in enumerate(plot_joints):
+        ax = axes[idx]
+        cal_mat = np.vstack(cal_stack[joint])   # (N_cycles_total, 101)
+        vic_mat = np.vstack(vic_stack[joint])
+
+        cal_mean = np.nanmean(cal_mat, axis=0)
+        cal_sd   = np.nanstd(cal_mat, axis=0)
+        vic_mean = np.nanmean(vic_mat, axis=0)
+        vic_sd   = np.nanstd(vic_mat, axis=0)
+
+        rmse = calc_rmse(cal_mean, vic_mean)
+        r    = calc_pearson(cal_mean, vic_mean)
+        icc  = calc_icc(cal_mean, vic_mean, icc_type="3,1")
+
+        ax.fill_between(x, cal_mean - cal_sd, cal_mean + cal_sd,
+                        color="tab:blue", alpha=0.18)
+        ax.fill_between(x, vic_mean - vic_sd, vic_mean + vic_sd,
+                        color="tab:red",  alpha=0.18)
+        ax.plot(x, cal_mean, color="tab:blue", lw=1.8, label="caliscope")
+        ax.plot(x, vic_mean, color="tab:red",  lw=1.8, label="Vicon")
+        ax.set_xlabel("Цикл походки, %", fontsize=8)
+        ax.set_ylabel("Угол, °", fontsize=8)
+        label = joint_labels_ru.get(joint, joint)
+        ax.set_title(f"{label}\nRMSE={rmse:.1f}° r={r:.2f} ICC={icc:.2f}", fontsize=8.5)
+        ax.legend(fontsize=7.5, loc="upper right")
+        ax.grid(alpha=0.25)
+        ax.tick_params(labelsize=7)
+        print(f"  {joint}: RMSE={rmse:.2f}° r={r:.3f} ICC={icc:.3f} "
+              f"cal_cycles={cal_mat.shape[0]} vic_cycles={vic_mat.shape[0]}")
+
+    for idx in range(len(plot_joints), len(axes)):
+        axes[idx].set_visible(False)
+
+    fig.suptitle(
+        "Уровень A: caliscope vs Vicon — суставные углы (среднее ± СКО)\n"
+        f"Пулинг p1_1..p1_5 × Vicon 1..5, модель {MODEL}",
+        fontsize=10,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.savefig(FIG / "fig_vicon_compare.png", dpi=120)
+    print(f"fig_vicon_compare.png  joints={plot_joints}")
 
 
 if __name__ == "__main__":
@@ -244,6 +361,7 @@ if __name__ == "__main__":
     fig_cv()
     fig_pipeline()
     fig_architecture()
+    fig_vicon_compare()
     with open(ROOT / "p1_3_results_for_report.json", "w") as fh:
         json.dump(res, fh, indent=2)
     print("DONE")
